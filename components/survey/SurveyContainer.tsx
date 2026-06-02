@@ -131,7 +131,17 @@ export default function SurveyContainer() {
     { id: 'pa_q9', type: 'textarea', question: 'What features would make this genuinely useful for your business?' },
     { id: 'pa_q10', type: 'radio', question: 'If PaintIt helped you win more jobs or close clients faster, would you consider paying for it?', options: ['Yes', 'No', 'Maybe'] },
     { id: 'pa_q11', type: 'textarea', question: 'What would make PaintIt valuable enough for you to pay for?' },
-    { id: 'pa_q12', type: 'radio', question: 'What monthly price feels reasonable?', options: ['Less than ₦5,000', '₦5,000–₦10,000', '₦10,000–₦20,000', '₦20,000+'] },
+    { 
+  id: 'pa_q12', 
+  type: 'radio', 
+  question: 'Which investment plan makes the most sense for your business workflow?', 
+  options: [
+    '₦15,000 – ₦25,000 / month (Standard Plan — Unlimited 3D Room Models)', 
+    '₦25,000 – ₦50,000 / month (Premium Agency — Unlimited Rooms + Custom Branding)', 
+    '₦50,000+ / month (Enterprise Fleet Tier)', 
+    'Pay-As-You-Go: ₦2,000 – ₦5,000 per individual 3D project model built'
+  ] 
+},
     { id: 'pa_q13', type: 'textarea', question: 'Anything else you\'d like us to build?' }
   ], []);
 
@@ -147,7 +157,17 @@ export default function SurveyContainer() {
     { id: 'de_q9', type: 'textarea', question: 'What features would make PaintIt indispensable for your work?' },
     { id: 'de_q10', type: 'radio', question: 'If PaintIt helped you communicate ideas faster and close more projects, would you pay for it?', options: ['Yes', 'No', 'Maybe'] },
     { id: 'de_q11', type: 'textarea', question: 'What would make it worth paying for?' },
-    { id: 'de_q12', type: 'radio', question: 'What monthly price feels reasonable?', options: ['Less than ₦5,000', '₦5,000–₦10,000', '₦10,000–₦20,000', '₦20,000+'] },
+    { 
+  id: 'de_q12', 
+  type: 'radio', 
+  question: 'Which investment plan makes the most sense for your design workflow?', 
+  options: [
+    '₦15,000 – ₦25,000 / month (Standard Plan — Unlimited 3D Room Models)', 
+    '₦25,000 – ₦50,000 / month (Premium Agency — Unlimited Rooms + Custom Branding)', 
+    '₦50,000+ / month (Enterprise Fleet Tier)', 
+    'Pay-As-You-Go: ₦2,000 – ₦5,000 per individual 3D project model built'
+  ] 
+},
     { id: 'de_q13', type: 'textarea', question: 'Anything else you\'d love to see?' }
   ], []);
 
