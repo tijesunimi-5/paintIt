@@ -4,6 +4,7 @@ import React from 'react';
 import NoiseOverlay from '@/components/ui/NoiseOverlay';
 import SurveyContainer from '@/components/survey/SurveyContainer';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 
 export default function Home() {
   const triggerDemoRedirect = () => {
@@ -58,12 +59,12 @@ export default function Home() {
             >
               TAKE SURVEY ↓
             </button>
-            <a
-              href="#demo"
+            <Link
+              href="/#studio-showcase"
               className="text-neutral-400 border border-neutral-900 text-xs font-mono px-6 py-3.5 rounded-full hover:bg-neutral-950 transition-colors"
             >
               TRY DEMO SPACE
-            </a>
+            </Link>
           </motion.div>
         </div>
       </section>
