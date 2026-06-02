@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -14,28 +14,40 @@ export default function Scene({ activeSurface }: SceneProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const controlsRef = useRef<any>(null);
 
+  // 1. INITIAL POSITION LOCK: Force the camera target on the very first render mount
+  useEffect(() => {
+    if (controlsRef.current) {
+      // Points the camera slightly lower and pushed forward into the space
+      controlsRef.current.target.set(0, 2.8, -1.0);
+      controlsRef.current.update();
+    }
+  }, []);
+
+  // 2. DYNAMIC AUTO-PANNING LERP LOOP
   useFrame(() => {
     if (!controlsRef.current) return;
 
-    // Default look-at targets
+    // Default room look-at coordinates match your preferred open visual perspective exactly
     let targetX = 0;
-    let targetY = 3.5;
-    let targetZ = 0;
+    let targetY = 2.8;
+    let targetZ = -1.0;
 
-    // Automated camera tracking updates based on active UI surface selection
+    // Smoothly pan only if a specific wall has been actively selected
     if (activeSurface === 'wallLeft') {
-      targetX = -1.8; // Smoothly shifts focus to frame the left wall edge
-      targetY = 3.5;
+      targetX = -1.8;
+      targetY = 2.8;
+      targetZ = 0;
     } else if (activeSurface === 'wallRight') {
-      targetX = 1.8;  // Smoothly shifts focus to frame the right wall edge
-      targetY = 3.5;
+      targetX = 1.8;
+      targetY = 2.8;
+      targetZ = 0;
     } else if (activeSurface === 'wallBack') {
       targetX = 0;
-      targetY = 3.5;
-      targetZ = -0.5;
+      targetY = 2.8;
+      targetZ = -1.5;
     }
 
-    // Seamlessly lerp the controls target vector so the transition is fluid
+    // Smoothly glide to targets
     controlsRef.current.target.x = THREE.MathUtils.lerp(controlsRef.current.target.x, targetX, 0.08);
     controlsRef.current.target.y = THREE.MathUtils.lerp(controlsRef.current.target.y, targetY, 0.08);
     controlsRef.current.target.z = THREE.MathUtils.lerp(controlsRef.current.target.z, targetZ, 0.08);
@@ -58,15 +70,11 @@ export default function Scene({ activeSurface }: SceneProps) {
         enableDamping
         dampingFactor={0.05}
 
-        // 1. LOCK THE HORIZONTAL SWIPE (Azimuth Boundary limits)
-        // This stops them from spinning 360°. They can only swipe a tiny bit left and right.
-        minAzimuthAngle={-Math.PI / 8} // Approx -22.5 degrees maximum left swipe
-        maxAzimuthAngle={Math.PI / 8}  // Approx 22.5 degrees maximum right swipe
-
-        // 2. LOCK THE VERTICAL SWIPE (Polar Boundary limits)
-        // Stops them from looking at the raw floor or direct ceiling grids
-        minPolarAngle={Math.PI / 2.1}  // Almost perfectly level horizontally
-        maxPolarAngle={Math.PI / 1.8}  // Minimal down tilt allowance
+        // Locked limits keep the view perfectly framed and under control
+        minAzimuthAngle={-Math.PI / 8}
+        maxAzimuthAngle={Math.PI / 8}
+        minPolarAngle={Math.PI / 2.1}
+        maxPolarAngle={Math.PI / 1.8}
       />
     </>
   );

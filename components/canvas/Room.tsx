@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { animated, useSpring } from '@react-spring/three';
 import { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -9,6 +9,8 @@ import { SelectedSurface } from '@/types/index';
 
 export default function Room() {
   const { roomColors, setActiveSurface, activeSurface } = useStudio();
+
+  // Clean room dimensions matrix
   const width = 14;
   const height = 8;
   const depth = 14;
@@ -17,7 +19,6 @@ export default function Room() {
   const sprWallBack = useSpring({ color: roomColors.wallBack, config: { tension: 140, friction: 26 } });
   const sprWallLeft = useSpring({ color: roomColors.wallLeft, config: { tension: 140, friction: 26 } });
   const sprWallRight = useSpring({ color: roomColors.wallRight, config: { tension: 140, friction: 26 } });
-  const sprFloor = useSpring({ color: roomColors.floor, config: { tension: 100, friction: 25 } });
   const sprCeiling = useSpring({ color: roomColors.ceiling, config: { tension: 100, friction: 25 } });
 
   const handleMeshClick = (surface: SelectedSurface, e: ThreeEvent<MouseEvent>) => {
@@ -25,12 +26,52 @@ export default function Room() {
     setActiveSurface(surface);
   };
 
+  // Compile the high-performance procedural grid-line tile system
+  const floorPatternMaterial = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        baseColor: { value: new THREE.Color(roomColors.floor || '#161618') },
+        lineColor: { value: new THREE.Color('#242427') },
+        scale: { value: 10.0 } // Dictates the sizing scale of the floor patterns
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        uniform vec3 baseColor;
+        uniform vec3 lineColor;
+        uniform float scale;
+        void main() {
+          // Creates clean grid lines using screen-space derivatives to completely eliminate mobile aliasing
+          vec2 grid = abs(fract(vUv * scale - 0.5) - 0.5) / fwidth(vUv * scale);
+          float line = min(grid.x, grid.y);
+          float c = 1.0 - min(line, 1.0);
+          
+          vec3 finalColor = mix(baseColor, lineColor, c);
+          gl_FragColor = vec4(finalColor, 1.0);
+        }
+      `
+    });
+  }, [roomColors.floor]);
+
+  // Synchronize dynamic color changes smoothly with our custom shader layer
+  React.useEffect(() => {
+    if (floorPatternMaterial.uniforms.baseColor) {
+      floorPatternMaterial.uniforms.baseColor.value.set(roomColors.floor);
+    }
+  }, [roomColors.floor, floorPatternMaterial]);
+
   return (
     <group>
-      {/* 1. FLOOR */}
+      {/* 1. PROCEDURAL PATTERN FLOOR */}
       <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} onClick={(e) => handleMeshClick('floor', e)}>
         <planeGeometry args={[width, depth]} />
-        <animated.meshStandardMaterial color={sprFloor.color} roughness={0.65} metalness={0.1} />
+        <primitive object={floorPatternMaterial} attach="material" />
       </mesh>
 
       {/* 2. CEILING */}
