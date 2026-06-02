@@ -94,21 +94,30 @@ export default function AnalyticsDashboard({ data }: { data: AnalyticsSummary })
       </div>
 
       {/* CHART C: COMMERCIAL PRICING VALUE METRICS MATRICES */}
-      <div className="bg-neutral-950 p-6 rounded-xl border border-neutral-900 space-y-4">
-        <h4 className="text-sm font-mono text-neutral-400 uppercase tracking-widest">Willingness To Pay & Pricing Metrics</h4>
-        <div className="h-48 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            {/* Swapped layout type from custom string "harmonic" to standard "vertical" */}
-            <BarChart data={data.pricingPreferences} layout="vertical">
-              <CartesianGrid stroke="#1F1F1F" horizontal={false} />
-              <XAxis type="number" stroke="#525252" fontSize={10} />
-              <YAxis dataKey="name" type="category" stroke="#525252" fontSize={10} width={100} tickLine={false} />
-              <Tooltip contentStyle={{ backgroundColor: '#0A0A0A', border: '1px solid #222' }} />
-              <Bar dataKey="value" fill="#8C8C8C" radius={[0, 4, 4, 0]} maxBarSize={20} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+    {/* CHART C: COMMERCIAL PRICING VALUE METRICS MATRICES */}
+<div className="bg-neutral-950 p-6 rounded-xl border border-neutral-900 space-y-4">
+  <h4 className="text-sm font-mono text-neutral-400 uppercase tracking-widest">Willingness To Pay & Pricing Metrics</h4>
+  <div className="h-48 w-full">
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart 
+        // Inline map safely shortens long survey labels so the Recharts layout stays clean and premium
+        data={data.pricingPreferences.map(item => ({
+          ...item,
+          name: item.name.includes('Pay-As-You-Go') 
+            ? 'Pay-As-You-Go (Per Room)' 
+            : item.name.split(' (')[0] // Trims off the descriptive text in parentheses
+        }))} 
+        layout="vertical"
+      >
+        <CartesianGrid stroke="#1F1F1F" horizontal={false} />
+        <XAxis type="number" stroke="#525252" fontSize={10} />
+        <YAxis dataKey="name" type="category" stroke="#525252" fontSize={10} width={140} tickLine={false} />
+        <Tooltip contentStyle={{ backgroundColor: '#0A0A0A', border: '1px solid #222' }} />
+        <Bar dataKey="value" fill="#8C8C8C" radius={[0, 4, 4, 0]} maxBarSize={20} />
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+</div>
 
     </div>
   );
