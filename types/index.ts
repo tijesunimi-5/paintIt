@@ -7,14 +7,6 @@ export interface RoomColors {
   ceiling: string;
 }
 
-export interface PaintPreset {
-  id: string;
-  name: string;
-  hex: string;
-  collection: string;
-  description: string;
-}
-
 export type SelectedSurface =
   | "wallBack"
   | "wallLeft"
@@ -22,3 +14,15 @@ export type SelectedSurface =
   | "wallFront"
   | "floor"
   | "ceiling";
+
+export type PaintValue = string | { top: string; bottom: string };
+
+export interface PaintPreset {
+  id: string;
+  name: string;
+  type: "flat" | "split";
+  hex?: string; // Optional for flat styles
+  colors?: { top: string; bottom: string }; // Optional for double split styles
+  collection: string;
+  description: string;
+}
