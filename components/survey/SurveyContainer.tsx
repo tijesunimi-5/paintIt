@@ -10,7 +10,6 @@ import { UserRole } from '@/types/feedback';
 
 const LOCAL_STORAGE_KEY = 'paintit_survey_draft';
 
-// Define a strict shape type signature for the state object
 type SurveyResponsesState = Record<string, string | string[]>;
 
 interface ContactState {
@@ -129,20 +128,26 @@ export default function SurveyContainer() {
     { id: 'pa_q7', type: 'radio', question: 'Would you use this during discussions with clients?', options: ['Yes', 'No', 'Maybe'] },
     { id: 'pa_q8', type: 'radio', question: 'Would it make your service appear more professional?', options: ['Yes', 'No', 'Maybe'] },
     { id: 'pa_q9', type: 'textarea', question: 'What features would make this genuinely useful for your business?' },
-    { id: 'pa_q10', type: 'radio', question: 'If PaintIt helped you win more jobs or close clients faster, would you consider paying for it?', options: ['Yes', 'No', 'Maybe'] },
+    { id: 'pa_q10', type: 'radio', question: 'How important would a tool like PaintIt be to your business?', options: ['Not important', 'Slightly important', 'Moderately important', 'Very important', 'Essential'] },
     { id: 'pa_q11', type: 'textarea', question: 'What would make PaintIt valuable enough for you to pay for?' },
     { 
-  id: 'pa_q12', 
-  type: 'radio', 
-  question: 'Which investment plan makes the most sense for your business workflow?', 
-  options: [
-    '₦15,000 – ₦25,000 / month (Standard Plan — Unlimited 3D Room Models)', 
-    '₦25,000 – ₦50,000 / month (Premium Agency — Unlimited Rooms + Custom Branding)', 
-    '₦50,000+ / month (Enterprise Fleet Tier)', 
-    'Pay-As-You-Go: ₦2,000 – ₦5,000 per individual 3D project model built'
-  ] 
-},
-    { id: 'pa_q13', type: 'textarea', question: 'Anything else you\'d like us to build?' }
+      id: 'pa_q12', 
+      type: 'radio', 
+      question: 'If PaintIt helped you close more jobs, reduce client confusion, and make your service appear more professional, how would you prefer to pay?', 
+      options: ['Per client/project', 'Monthly subscription', 'Annual subscription', 'One-time payment', 'Not sure yet'] 
+    },
+    { 
+      id: 'pa_q13', 
+      type: 'radio', 
+      question: 'If PaintIt saved you time and helped you win more clients, would you be interested in becoming an early user?', 
+      options: ['Yes', 'Maybe', 'No'] 
+    },
+    { 
+      id: 'pa_q14', 
+      type: 'radio', 
+      question: 'Would you like to join the early access list and receive founder pricing when PaintIt launches?', 
+      options: ['Yes', 'No'] 
+    }
   ], []);
 
   const designerQuestions = useMemo(() => [
@@ -155,20 +160,26 @@ export default function SurveyContainer() {
     { id: 'de_q7', type: 'radio', question: 'Would AI-generated design suggestions be valuable?', options: ['Yes', 'No', 'Maybe'] },
     { id: 'de_q8', type: 'textarea', question: 'What is your biggest challenge when working with clients?' },
     { id: 'de_q9', type: 'textarea', question: 'What features would make PaintIt indispensable for your work?' },
-    { id: 'de_q10', type: 'radio', question: 'If PaintIt helped you communicate ideas faster and close more projects, would you pay for it?', options: ['Yes', 'No', 'Maybe'] },
-    { id: 'de_q11', type: 'textarea', question: 'What would make it worth paying for?' },
+    { id: 'de_q10', type: 'radio', question: 'How important would a tool like PaintIt be to your business?', options: ['Not important', 'Slightly important', 'Moderately important', 'Very important', 'Essential'] },
+    { id: 'de_q11', type: 'textarea', question: 'What would make PaintIt valuable enough for you to pay for?' },
     { 
-  id: 'de_q12', 
-  type: 'radio', 
-  question: 'Which investment plan makes the most sense for your design workflow?', 
-  options: [
-    '₦15,000 – ₦25,000 / month (Standard Plan — Unlimited 3D Room Models)', 
-    '₦25,000 – ₦50,000 / month (Premium Agency — Unlimited Rooms + Custom Branding)', 
-    '₦50,000+ / month (Enterprise Fleet Tier)', 
-    'Pay-As-You-Go: ₦2,000 – ₦5,000 per individual 3D project model built'
-  ] 
-},
-    { id: 'de_q13', type: 'textarea', question: 'Anything else you\'d love to see?' }
+      id: 'de_q12', 
+      type: 'radio', 
+      question: 'If PaintIt helped you close more jobs, reduce client confusion, and make your service appear more professional, how would you prefer to pay?', 
+      options: ['Per client/project', 'Monthly subscription', 'Annual subscription', 'One-time payment', 'Not sure yet'] 
+    },
+    { 
+      id: 'de_q13', 
+      type: 'radio', 
+      question: 'If PaintIt saved you time and helped you win more clients, would you be interested in becoming an early user?', 
+      options: ['Yes', 'Maybe', 'No'] 
+    },
+    { 
+      id: 'de_q14', 
+      type: 'radio', 
+      question: 'Would you like to join the early access list and receive founder pricing when PaintIt launches?', 
+      options: ['Yes', 'No'] 
+    }
   ], []);
 
   const targetedQuestions = useMemo(() => {
@@ -301,7 +312,6 @@ export default function SurveyContainer() {
                       onChange={(e) => setContact((prev: ContactState) => ({ ...prev, earlyAccess: e.target.checked }))}
                       className="w-4 h-4 rounded mt-0.5 accent-white bg-neutral-900 border-neutral-800"
                     />
-                    {/* Replaced raw apostrophe with &apos; to clear the unescaped entity rule */}
                     <span className="text-xs text-neutral-400 font-light leading-snug">I&apos;d like to reserve guaranteed early access priority paths when PaintIt launches updates.</span>
                   </label>
                 </div>
