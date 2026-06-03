@@ -113,9 +113,10 @@ export default function SurveyContainer() {
     { id: 'ho_q6', type: 'textarea', question: 'What did you like most?' },
     { id: 'ho_q7', type: 'textarea', question: 'What felt missing or confusing?' },
     { id: 'ho_q8', type: 'multiselect', question: 'Which features would you love to have?', options: ['Furniture', 'Beds', 'Curtains', 'Mirrors', 'Wardrobes', 'TV', 'Lighting', 'Wallpapers', 'Paint Patterns', 'Upload My Room Photo', 'AI Suggestions', 'Other'] },
-    { id: 'ho_q9', type: 'radio', question: 'If a painter offered this before painting began, would it increase your confidence in them?', options: ['Yes', 'No', 'Maybe'] },
-    { id: 'ho_q10', type: 'radio', question: 'Would this help you make decisions faster?', options: ['Yes', 'No', 'Maybe'] },
-    { id: 'ho_q11', type: 'textarea', question: "Anything else you'd love PaintIt to do?" }
+    { id: 'ho_q9', type: 'radio', question: 'Would you use PaintIt to design and plan your room visual parameters?', options: ['Yes', 'Maybe', 'No'] },
+    { id: 'ho_q10', type: 'radio', question: 'Would you trust professional painters more if they used PaintIt to visualize project briefs?', options: ['Yes', 'Maybe', 'No'] },
+    { id: 'ho_q11', type: 'radio', question: 'Would you like PaintIt to connect you directly to verified local painters who can bring your 3D design to life?', options: ['Yes', 'No, I prefer finding my own', 'Maybe'] },
+    { id: 'ho_q12', type: 'textarea', question: "Anything else you'd love PaintIt to do?" }
   ], []);
 
   const painterQuestions = useMemo(() => [
@@ -129,18 +130,13 @@ export default function SurveyContainer() {
     { id: 'pa_q8', type: 'radio', question: 'Would it make your service appear more professional?', options: ['Yes', 'No', 'Maybe'] },
     { id: 'pa_q9', type: 'textarea', question: 'What features would make this genuinely useful for your business?' },
     { id: 'pa_q10', type: 'radio', question: 'How important would a tool like PaintIt be to your business?', options: ['Not important', 'Slightly important', 'Moderately important', 'Very important', 'Essential'] },
-    { id: 'pa_q11', type: 'textarea', question: 'What would make PaintIt valuable enough for you to pay for?' },
-    { 
-      id: 'pa_q12', 
-      type: 'radio', 
-      question: 'If PaintIt helped you close more jobs, reduce client confusion, and make your service appear more professional, how would you prefer to pay?', 
-      options: ['Per client/project', 'Monthly subscription', 'Annual subscription', 'One-time payment', 'Not sure yet'] 
-    },
+    { id: 'pa_q11', type: 'textarea', question: 'Assume PaintIt helps you show rooms realistically, cuts color confusion, boosts professionalism, and helps clients decide faster. If it genuinely helps you close more jobs every month, how much would that be worth to your business? (Name your value or estimated range)' },
+    { id: 'pa_q12', type: 'textarea', question: 'What specific milestone or result would make you feel PaintIt is absolutely worth paying for every single month?' },
     { 
       id: 'pa_q13', 
       type: 'radio', 
-      question: 'If PaintIt saved you time and helped you win more clients, would you be interested in becoming an early user?', 
-      options: ['Yes', 'Maybe', 'No'] 
+      question: 'If PaintIt helped you close more jobs, reduce client confusion, and make your service appear more professional, how would you prefer to pay?', 
+      options: ['Per client/project', 'Monthly subscription', 'Annual subscription', 'One-time payment', 'Not sure yet'] 
     },
     { 
       id: 'pa_q14', 
@@ -161,18 +157,13 @@ export default function SurveyContainer() {
     { id: 'de_q8', type: 'textarea', question: 'What is your biggest challenge when working with clients?' },
     { id: 'de_q9', type: 'textarea', question: 'What features would make PaintIt indispensable for your work?' },
     { id: 'de_q10', type: 'radio', question: 'How important would a tool like PaintIt be to your business?', options: ['Not important', 'Slightly important', 'Moderately important', 'Very important', 'Essential'] },
-    { id: 'de_q11', type: 'textarea', question: 'What would make PaintIt valuable enough for you to pay for?' },
-    { 
-      id: 'de_q12', 
-      type: 'radio', 
-      question: 'If PaintIt helped you close more jobs, reduce client confusion, and make your service appear more professional, how would you prefer to pay?', 
-      options: ['Per client/project', 'Monthly subscription', 'Annual subscription', 'One-time payment', 'Not sure yet'] 
-    },
+    { id: 'de_q11', type: 'textarea', question: 'Assume PaintIt helps you show rooms realistically, cuts color confusion, boosts professionalism, and helps clients decide faster. If it genuinely helps you close more jobs every month, how much would that be worth to your business? (Name your value or estimated range)' },
+    { id: 'de_q12', type: 'textarea', question: 'What specific milestone or result would make you feel PaintIt is absolutely worth paying for every single month?' },
     { 
       id: 'de_q13', 
       type: 'radio', 
-      question: 'If PaintIt saved you time and helped you win more clients, would you be interested in becoming an early user?', 
-      options: ['Yes', 'Maybe', 'No'] 
+      question: 'If PaintIt helped you communicate ideas faster and close more projects, how would you prefer to pay?', 
+      options: ['Per client/project', 'Monthly subscription', 'Annual subscription', 'One-time payment', 'Not sure yet'] 
     },
     { 
       id: 'de_q14', 
