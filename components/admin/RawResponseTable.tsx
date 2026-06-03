@@ -10,18 +10,21 @@ interface RawResponseTableProps {
 type FilterCategory = 'all' | 'painter' | 'designer' | 'homeowner' | 'student_renter' | 'other';
 
 const questionDictionary: Record<string, string> = {
+  // Homeowner Track
   ho_q1: 'Have you ever painted or redesigned a room before?',
   ho_q2: 'How difficult was choosing the right colors?',
-  ho_q3: 'Have you ever worried that a color might look different on the wall?',
+  ho_q3: 'Have you ever worried that a color might look different on the wall than you imagined?',
   ho_q4: 'Would seeing the room before painting help you feel more confident?',
   ho_q5: 'After trying the PaintIt demo, what was your first impression?',
   ho_q6: 'What did you like most?',
   ho_q7: 'What felt missing or confusing?',
   ho_q8: 'Which features would you love to have?',
-  ho_q9: 'If a painter offered this, would it increase your confidence in them?',
-  ho_q10: 'Would this help you make decisions faster?',
-  ho_q11: "Anything else you'd love PaintIt to do?",
+  ho_q9: 'Would you personally use PaintIt to design and plan your room visual parameters?',
+  ho_q10: 'Would you trust professional painters more if they used PaintIt to visualize project briefs?',
+  ho_q11: 'Would you like PaintIt to connect you directly to verified local painters who can bring your 3D design to life?',
+  ho_q12: "Anything else you'd love PaintIt to do?",
 
+  // Professional Painter Track
   pa_q1: 'How long have you been working as a painter?',
   pa_q2: 'Do clients struggle to choose colors?',
   pa_q3: 'Do clients ever change their minds after work begins?',
@@ -31,11 +34,13 @@ const questionDictionary: Record<string, string> = {
   pa_q7: 'Would you use this during discussions with clients?',
   pa_q8: 'Would it make your service appear more professional?',
   pa_q9: 'What features would make this genuinely useful for your business?',
-  pa_q10: 'If PaintIt helped you win more jobs, would you consider paying for it?',
-  pa_q11: 'What would make PaintIt valuable enough for you to pay for?',
-  pa_q12: 'Which investment plan makes the most sense for your business workflow?',
-  pa_q13: 'Anything else you\'d like us to build?',
+  pa_q10: 'How important would a tool like PaintIt be to your business?',
+  pa_q11: 'If PaintIt helped you win more jobs every month, how much would that be worth to your business?',
+  pa_q12: 'What result would make you feel it is worth paying for every month?',
+  pa_q13: 'Preferred payment style / billing setup configuration metrics',
+  pa_q14: 'Wants early access list and founder pricing tier updates?',
 
+  // Interior Designer Track
   de_q1: 'How long have you worked as an interior designer?',
   de_q2: 'Do clients struggle to visualize your ideas?',
   de_q3: 'Would room visualization help you present concepts more effectively?',
@@ -45,10 +50,11 @@ const questionDictionary: Record<string, string> = {
   de_q7: 'Would AI-generated design suggestions be valuable?',
   de_q8: 'What is your biggest challenge when working with clients?',
   de_q9: 'What features would make PaintIt indispensable for your work?',
-  de_q10: 'If PaintIt helped you communicate ideas faster, would you pay for it?',
-  de_q11: 'What would make it worth paying for?',
-  de_q12: 'Which investment plan makes the most sense for your design workflow?',
-  de_q13: 'Anything else you\'d love to see?'
+  de_q10: 'How important would a tool like PaintIt be to your business?',
+  de_q11: 'If PaintIt helped you win more jobs every month, how much would that be worth to your business?',
+  de_q12: 'What result would make you feel it is worth paying for every month?',
+  de_q13: 'Preferred payment style / billing setup configuration metrics',
+  de_q14: 'Wants early access list and founder pricing tier updates?'
 };
 
 export default function RawResponseTable({ submissions }: RawResponseTableProps) {
