@@ -1,34 +1,29 @@
 "use client";
 import { motion } from "framer-motion";
 
-const pipeline = [
-  { title: "Exterior Optimization", horizon: "Phase 2", desc: "Expanding visual mapping structures over high-rise commercial structures and fence boundaries." },
-  { title: "Interior Decoration Modules", horizon: "Phase 2", desc: "Overlay curtain variants, ambient accent lighting channels, and basic soft furnishing components." },
-  { title: "Furniture Spatial Placement", horizon: "Phase 3", desc: "Incorporate drag-and-drop dimensions for structural elements like wardrobes and bedding profiles." },
-  { title: "AI Color Match Suggestions", horizon: "Phase 3", desc: "Smart contextual recommendations recommending secondary accents based on native room parameters." },
-  { title: "Vetted Professional Marketplace", horizon: "Phase 4", desc: "Connecting authenticated homeowners and interior designers directly to premium painters." }
-];
-
 export default function FutureVision() {
   return (
-    <section className="px-4 max-w-5xl mx-auto opacity-75">
-      <div className="max-w-xl mx-auto text-center mb-12">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500 mb-2">Long-Term Product Pipeline</h2>
-        <p className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-300">Future Product Roadmap</p>
-        <p className="text-xs text-neutral-500 mt-2 font-normal">We are focusing completely on basic internal room rendering first. Here is what we plan to explore next.</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {pipeline.map((item, idx) => (
-          <div key={idx} className="p-4 border border-neutral-900 rounded-lg bg-neutral-900/5 flex flex-col justify-between">
-            <div>
-              <span className="text-[9px] px-2 py-0.5 border border-neutral-800 rounded-sm text-neutral-500 bg-neutral-950 font-mono inline-block mb-3">{item.horizon}</span>
-              <h3 className="text-xs font-bold text-neutral-300 mb-1">{item.title}</h3>
-              <p className="text-[11px] text-neutral-500 leading-relaxed font-normal">{item.desc}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+    <section className="px-4 max-w-4xl mx-auto text-center py-12 border-y border-neutral-900/60 bg-neutral-900/10 rounded-3xl relative overflow-hidden">
+      {/* Premium subtle glow background */}
+      <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-72 h-72 bg-emerald-500/5 blur-[100px] rounded-full pointer-events-none" />
+      
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+        className="max-w-2xl mx-auto"
+      >
+        <span className="text-[10px] font-mono tracking-widest uppercase text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-2.5 py-1 rounded">
+          On The Horizon
+        </span>
+        <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-neutral-200 mt-4 mb-3">
+          Continuous Innovation
+        </h2>
+        <p className="text-sm sm:text-base text-neutral-400 leading-relaxed font-normal max-w-xl mx-auto">
+          More visualization tools and collaboration features are already in development to elevate your professional workflow.
+        </p>
+      </motion.div>
     </section>
   );
 }
