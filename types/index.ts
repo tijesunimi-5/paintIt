@@ -26,3 +26,20 @@ export interface PaintPreset {
   collection: string;
   description: string;
 }
+
+export type AlertSeverity = "success" | "error" | "info";
+
+export interface ToastConfig {
+  message: string;
+  severity: AlertSeverity;
+  duration?: number;
+}
+
+export interface ConfirmationConfig {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}

@@ -2,11 +2,13 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
+import { useAlert } from "@/context/AlertContext";
 
 export default function EarlyAccessForm() {
   const [formData, setFormData] = useState({ name: "", email: "", phone: "", role: "Painter" });
   const [submitted, setSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const {showToast} = useAlert();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,10 +33,10 @@ export default function EarlyAccessForm() {
 
       if (!response.ok) {
         // Capture specific error hints from the backend schema flat validation map
-        setErrorMessage(data.error || "Validation error processing registration.");
+        showToast({ message: "Registration failed. Check your parameters.", severity: "error" });
         return;
       }
-
+      showToast({ message: "Welcome to the PaintIt waitlist!", severity: "success" });
       setSubmitted(true);
     } catch (err) {
       console.error("Network communication exception context:", err);
