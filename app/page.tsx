@@ -32,7 +32,7 @@ export default function Home() {
             <Features />
             <HowItWorks />
             <EarlyAccessForm />
-            <FutureVision />
+            {/* <FutureVision /> */}
             <Footer />
           </div>
 
