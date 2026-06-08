@@ -6,10 +6,10 @@ export default function Footer() {
       {/* Final Action Box */}
       <div className="p-8 border border-neutral-900 rounded-2xl bg-gradient-to-r from-neutral-950 via-neutral-900/50 to-neutral-950 text-center max-w-3xl mx-auto mb-16">
         <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-neutral-100 mb-4">
-          Turn Client Uncertainty Into Confidence
+          Join Early Access
         </h2>
         <p className="text-xs sm:text-sm text-neutral-400 max-w-md mx-auto mb-6 leading-relaxed font-normal">
-          Stop wasting hours with verbal explanations. Build trust faster, act more professional, and scale your business workflow cleanly.
+          Be among the first painters and homeowners helping shape PaintIt Studio. Lock in early access utilities and help us build the perfect visual tool for yourj
         </p>
         <a
           href="#early-access"

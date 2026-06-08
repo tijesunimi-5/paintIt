@@ -2,10 +2,10 @@
 import { motion } from "framer-motion";
 
 const solutions = [
-  { title: "Preview Wall Colors Instantly", desc: "Show complete room changes across multiple walls and ceilings with absolute accuracy instead of guessing." },
-  { title: "Test Structural Combinations", desc: "Mix and match deep base layers, primary palettes, and horizontal trim variants cleanly on-the-fly." },
-  { title: "Compare Custom Designs", desc: "Switch design variants instantly right in front of the client to settle debates immediately." },
-  { title: "Build Confidence Before Painting", desc: "Mitigate anxiety and guarantee project sign-off before a single drop of real paint is purchased." }
+  { title: "Test room combinations instantly", desc: "Change colors across different walls and the ceiling on your phone screen to find the perfect look without guessing." },
+  { title: "Settle choices right on-site", desc: "Switch color variants instantly in front of your client or family to pick the winning design immediately." },
+  { title: "Share mobile preview links", desc: "Send an accurate visualization link straight over WhatsApp so everyone stays on the exact same page." },
+  { title: "Buy materials with peace of mind", desc: "Remove all color hesitation and confirm the look before spending money on paint container drums." }
 ];
 
 export default function Solution() {
@@ -15,12 +15,12 @@ export default function Solution() {
         <div className="absolute top-0 right-0 w-[200px] h-[200px] bg-emerald-500/5 blur-[80px] rounded-full pointer-events-none" />
 
         <div className="max-w-2xl mb-12">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-emerald-400 mb-3">The Solution</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-emerald-400 mb-3">What You Get</h2>
           <p className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-100">
-            Show. Don&apos;t Explain.
+            See the Room in Real Colours Before You Buy Paint
           </p>
           <p className="mt-4 text-sm sm:text-base text-neutral-400 leading-relaxed font-normal">
-            Eliminate hours of verbal negotiation. Hand your client a structured mobile visualization link that acts as a concrete anchor for your contract execution.
+            Stop relying on tiny color swatch cards, filtered internet screenshots, or creative guesswork. Show your clients or family exactly how the final space looks before a single brush stroke touches the wall.
           </p>
         </div>
 
