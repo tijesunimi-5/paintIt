@@ -3,12 +3,13 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useAlert } from "@/context/AlertContext";
+import { identifyUserSession } from "@/utils/tracker"; // 🔒 Injected tracking identity helper
 
 export default function EarlyAccessForm() {
   const [formData, setFormData] = useState({ name: "", email: "", phone: "", role: "Painter" });
   const [submitted, setSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const {showToast} = useAlert();
+  const { showToast } = useAlert();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,13 +30,20 @@ export default function EarlyAccessForm() {
         }),
       });
 
-      const data = await response.json();
+      // 🔒 FIX: Only try to parse JSON if the server actually sent back content (not a 204)
+      let data = null;
+      if (response.status !== 204) {
+        data = await response.json();
+      }
 
       if (!response.ok) {
-        // Capture specific error hints from the backend schema flat validation map
         showToast({ message: "Registration failed. Check your parameters.", severity: "error" });
         return;
       }
+
+      // Connect current session timeline data to this email identity inside the tracker storage layer[cite: 1]
+      await identifyUserSession(formData.email);
+
       showToast({ message: "Welcome to the PaintIt waitlist!", severity: "success" });
       setSubmitted(true);
     } catch (err) {
@@ -52,7 +60,8 @@ export default function EarlyAccessForm() {
         viewport={{ once: true }}
         className="border border-neutral-800 rounded-2xl bg-neutral-900/40 p-6 sm:p-10 backdrop-blur-md relative overflow-hidden"
       >
-        <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-emerald-500 via-transparent to-transparent" />
+        {/* 🎨 FIX: Cleaned up structural class identifiers matching canonical Tailwind standards */}
+        <div className="absolute top-0 left-0 w-full h-0.5 bg-linear-to-r from-emerald-500 via-transparent to-transparent" />
 
         <div className="text-center sm:text-left max-w-xl mb-8">
           <h2 className="text-xl sm:text-2xl font-bold text-neutral-100">Help shape the future of PaintIt Studio</h2>
@@ -61,7 +70,6 @@ export default function EarlyAccessForm() {
           </p>
         </div>
 
-        {/* Dynamic Warning Alert Box */}
         {errorMessage && (
           <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg text-center">
             {errorMessage}

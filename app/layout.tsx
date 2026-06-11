@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google"; 
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/context/AuthContext";
+import { AlertProvider } from "@/context/AlertContext"; // Your active global toast alert banner component
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -26,17 +28,16 @@ export const metadata: Metadata = {
   creator: "PaintIt Studio",
   publisher: "PaintIt Studio",
 
-  // OpenGraph metrics control how your link expands visually on WhatsApp, iMessage, and LinkedIn
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://paintit-six.vercel.app", // Ensure this matches your production domain
+    url: "https://paintit-six.vercel.app",
     title: "See Your Room Colors Instantly in 3D | PaintIt Studio",
     description: "Eradicate paint choice guesswork. Let clients customize walls, view ambient daylight shifts, and finalize space aesthetics interactively before buying paint.",
     siteName: "PaintIt Studio",
     images: [
       {
-        url: "/og-image.png", // Drop a 1200x630 dark minimal screenshot here later
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "PaintIt Interactive 3D Architecture Canvas Framework Preview",
@@ -44,7 +45,6 @@ export const metadata: Metadata = {
     ],
   },
 
-  // Twitter visual micro-cards layout configurations
   twitter: {
     card: "summary_large_image",
     title: "PaintIt Studio // Immersive Spatial Finishes Preview Engine",
@@ -52,7 +52,6 @@ export const metadata: Metadata = {
     images: ["/og-image.png"],
   },
 
-  // Tells search engine spiders how to catalog the index priority pathways
   robots: {
     index: true,
     follow: true,
@@ -66,12 +65,12 @@ export const metadata: Metadata = {
   },
 };
 
-// 2. VIEWPORT MATRIX OVERRIDES (Recommended Next.js 14/15 practice to split from metadata)
+// 2. VIEWPORT MATRIX OVERRIDES
 export const viewport: Viewport = {
-  themeColor: "#09090b", // Dark mode charcoal trim matching your dashboard background
+  themeColor: "#09090b",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1, // Fixes canvas scale bouncing shifts on mobile devices
+  maximumScale: 1,
   userScalable: false,
 };
 
@@ -86,7 +85,12 @@ export default function RootLayout({
       className={`scroll-smooth`}
     >
       <body className={`${jakarta.variable} font-sans bg-neutral-950 text-neutral-100 antialiased overflow-x-hidden`}>
-        {children}
+        {/* ✅ WRAP CHILDREN IN GLOBAL CONTEXT ENGINES */}
+        <AlertProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </AlertProvider>
       </body>
     </html>
   );

@@ -1,68 +1,99 @@
 // src/utils/tracker.ts
 
-// Generates a lightweight unique identification token string natively
-const generateUUID = (): string => {
+const generateToken = (): string => {
   return (
+    "pt_" +
     Math.random().toString(36).substring(2, 15) +
     Math.random().toString(36).substring(2, 15)
   );
 };
 
-export const initializeTracker = (onTriggerNudge: () => void) => {
+export const startTrackingLifecycle = (onTriggerNudge: () => void) => {
   if (typeof window === "undefined") return;
 
-  // 1. Fetch or initialize the visitor identifier string
-  let visitorToken = localStorage.getItem("paintit_visitor");
+  // 1. Initialize or pull the permanent anonymous visitor identifier token string
+  let visitorToken = localStorage.getItem("paintit_visitor_token");
   if (!visitorToken) {
-    visitorToken = "anon_" + generateUUID();
-    localStorage.setItem("paintit_visitor", visitorToken);
+    visitorToken = generateToken();
+    localStorage.setItem("paintit_visitor_token", visitorToken);
   }
 
-  const startTime = Date.now();
-  // let maxTimeObserved = 0;
-  let nudgeTriggered = false;
+  const sessionStartTime = Date.now();
+  let nudgeFired = false;
 
-  // 2. Continuous time counter loop logic
-  const trackHeartbeat = async () => {
-    const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+  // 2. Compute timeline update values and post statistics payload profiles to backend
+  const sendHeartbeatUpdate = () => {
+    const activeDurationSeconds = Math.floor(
+      (Date.now() - sessionStartTime) / 1000,
+    );
 
-    // Nudge the user to drop their email if they stay active for over 60 seconds
+    // Nudge the user with a popup if they spend more than 45 seconds actively on-page
     if (
-      elapsedSeconds >= 60 &&
-      !nudgeTriggered &&
-      !localStorage.getItem("paintit_identified")
+      activeDurationSeconds >= 45 &&
+      !nudgeFired &&
+      !localStorage.getItem("paintit_user_identified")
     ) {
-      nudgeTriggered = true;
+      nudgeFired = true;
       onTriggerNudge();
     }
 
-    try {
-      // Send tracking update payload silently using standard fetch API layers
-      await fetch("http://localhost:5000/api/analytics/heartbeat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          visitorToken,
-          duration: elapsedSeconds,
-          currentSection: window.location.hash || "HERO",
-          deviceType: window.innerWidth < 768 ? "MOBILE" : "DESKTOP",
-        }),
-        keepalive: true, // Crucial: Allows the request to succeed even if the tab closes!
-      });
-    } catch (err) {
-      // Quietly swallow network failures to prevent UI disruption
+    const payload = JSON.stringify({
+      visitorToken,
+      duration: activeDurationSeconds,
+      currentSection: window.location.hash || "HERO",
+      deviceType: window.innerWidth < 768 ? "MOBILE" : "DESKTOP",
+    });
+
+    // Use a native fetch call with keepalive: true so the ping completes even if the tab closes
+    fetch("http://localhost:5000/api/analytics/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {
+      // Quietly consume offline exceptions to prevent UI thread execution lockups
+    });
+  };
+
+  // Run the data reporting pulse loop every 10 seconds
+  const heartbeatTimer = setInterval(sendHeartbeatUpdate, 10000);
+
+  // Instantly execute an analytics update pulse when visibility states alter (e.g. tab closed)
+  const handleVisibilityAlteration = () => {
+    if (document.visibilityState === "hidden") {
+      sendHeartbeatUpdate();
     }
   };
 
-  // Run heartbeat ping every 10 seconds while the page remains active
-  const intervalId = setInterval(trackHeartbeat, 10000);
+  document.addEventListener("visibilitychange", handleVisibilityAlteration);
 
-  // Send a final update when the user closes the window or navigates away
-  window.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") {
-      trackHeartbeat();
-    }
-  });
+  // Return a clean unmount function to prevent memory leaks across layout render cycles
+  return () => {
+    clearInterval(heartbeatTimer);
+    document.removeEventListener(
+      "visibilitychange",
+      handleVisibilityAlteration,
+    );
+  };
+};
 
-  return () => clearInterval(intervalId);
+/**
+ * Call this function immediately when a visitor fills out any registration or waitlist form
+ */
+export const identifyUserSession = async (email: string) => {
+  if (typeof window === "undefined") return;
+  const visitorToken = localStorage.getItem("paintit_visitor_token");
+
+  if (!visitorToken) return;
+
+  try {
+    await fetch("http://localhost:5000/api/analytics/identify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visitorToken, email }),
+    });
+    localStorage.setItem("paintit_user_identified", "true");
+  } catch (err) {
+    console.error("Unable to submit session integration records:", err);
+  }
 };

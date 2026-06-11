@@ -43,3 +43,55 @@ export interface ConfirmationConfig {
   onConfirm: () => void;
   onCancel?: () => void;
 }
+
+export type UserRole = 'PAINTER' | 'DESIGNER' | 'CONSUMER' | 'ARCHITECT' | 'ADMIN';
+
+export interface UserSessionData {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  isVerified?: boolean;
+  createdAt?: string;
+}
+
+export interface UserProfileMetadata {
+  bio: string | null;
+  phoneNumber: string | null;
+  location: string;
+  experienceYears: number;
+  skills: string[];
+}
+
+export interface PortfolioProject {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  location: string;
+  images: string[];
+  colors_used: string[];
+  created_at: string;
+}
+
+// ✅ EXPLICIT TYPE FOR STEPONBOARDING
+export interface OnboardingStep {
+  id: number;
+  label: string;
+  description: string;
+}
+
+export interface ToastConfig {
+  message: string;
+  severity: 'success' | 'error' | 'info';
+  duration?: number;
+}
+
+export interface ConfirmationConfig {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}
