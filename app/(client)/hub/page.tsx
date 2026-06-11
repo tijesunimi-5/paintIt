@@ -3,60 +3,62 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { StepOnboarding, OnboardingStep } from '@/components/ui/StepOnboarding';
+import { StepOnboarding } from '@/components/ui/StepOnboarding';
+import { OnboardingStep } from '@/types/index'; // ✅ FIXED: Imported global model signature
 
 export default function HomeownerClientHubDashboard() {
   const { user } = useAuth();
-  const [savedDesigns, setSavedDesigns] = useState([]); // Array data mapping from GET /api/visualizations
+  const [savedDesigns] = useState([]); 
 
+  // Streamlined, professional instruction steps for property owners
   const clientOnboardingSteps: OnboardingStep[] = [
-    { id: 1, label: "Explore painter catalogs", description: "Browse verified local painters and contractors active across Ibadan." },
-    { id: 2, label: "Open a 3D canvas preset", description: "Select any studio design template from a painter's public timeline portfolio." },
-    { id: 3, label: "Remix with custom colors", description: "Change wall combinations in real-time. The painter's original layout stays untouched." },
-    { id: 4, label: "Request a project quote", description: "Save your custom color version and send it to the contractor to lock in your job." }
+    { id: 1, label: "Explore Catalogs", description: "Browse verified local painters and contractors active across Ibadan." },
+    { id: 2, label: "Select 3D Preset", description: "Choose a studio design template from a painter's public portfolio." },
+    { id: 3, label: "Remix Custom Colors", description: "Change wall combinations in real-time without modifying the original canvas." },
+    { id: 4, label: "Request a Quote", description: "Save your remixed scheme and dispatch it to the contractor to lock in a bid." }
   ];
 
   const handleExploreMarketplace = () => {
-    // Programmatic routing switch to public search gallery
     window.location.href = '/search/designs';
   };
 
   return (
-    <div className="w-full text-white min-h-[80vh] flex flex-col justify-between animate-fade-in">
-      {/* Top Banner Context Greetings Section */}
-      <div className="mb-6">
-        <h1 className="text-xl font-black tracking-tight text-neutral-100">
-          Welcome back, <span className="text-emerald-400 font-black">{user?.fullName || 'Homeowner'}</span>!
+    <div className="w-full text-white min-h-[75vh] flex flex-col justify-between animate-fade-in max-w-md mx-auto md:max-w-none">
+
+      {/* Top Header Section */}
+      <div className="border-b border-neutral-900 pb-4 mb-4">
+        <h1 className="text-base font-black text-neutral-100">
+          Welcome back, <span className="text-emerald-400">{user?.fullName?.split(" ")[0] || 'Homeowner'}</span>!
         </h1>
-        <p className="text-xs text-neutral-500 mt-0.5">Visualize adjustments, manage project estimates, and connect with decorators.</p>
+        <p className="text-[11px] text-neutral-500 mt-0.5">Visualize adjustments, manage spaces, and connect with decorators.</p>
       </div>
 
       {/* Dynamic Zero-State Handler Element Grid */}
       {savedDesigns.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center my-8">
+        <div className="flex-1 flex items-center justify-center py-4">
           <StepOnboarding
             title="Your Design Hub is Empty!"
             subtitle="Follow these quick milestones to remodel your space using interactive 3D color presets."
             steps={clientOnboardingSteps}
-            ctaText="Browse Studio Design Templates"
+            ctaText="Browse Design Templates"
             onCtaClick={handleExploreMarketplace}
             estimatedMinutes={2}
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {/* Render list content objects here when lengths are populated */}
-          <h3 className="text-sm font-bold text-neutral-400">Saved Room Remixed Presentations</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 my-4">
+          <h3 className="text-xs font-bold text-neutral-400">Saved Room Remixed Presentations</h3>
         </div>
       )}
 
-      {/* Trust Signpost Footer Segment Wrapper */}
-      <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-2xl flex items-center justify-between text-xs mt-auto">
-        <span className="text-neutral-500 font-medium">Need professional execution assistance?</span>
-        <a href="/search/painters" className="text-emerald-400 font-bold hover:underline transition-all">
-          Hire Verified Painter →
+      {/* Mobile-Optimized Action Footer Signpost */}
+      <div className="p-3.5 bg-neutral-950 border border-neutral-900/60 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs mt-auto">
+        <span className="text-neutral-500 font-medium text-[11px] text-center sm:text-left">Need professional execution assistance?</span>
+        <a href="/search/painters" className="text-emerald-400 font-bold hover:underline transition-all text-xs shrink-0">
+          Hire Verified Painter &rarr;
         </a>
       </div>
+
     </div>
   );
 }
