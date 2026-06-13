@@ -10,7 +10,6 @@ export default function PainterDashboardLayoutShell({
 }: {
   children: React.ReactNode;
 }) {
-  // Centralized, precise multi-device site router maps
   const painterNavItems: NavItem[] = [
     {
       label: "Dashboard",
@@ -43,13 +42,12 @@ export default function PainterDashboardLayoutShell({
 
   return (
     <RoleGuard allowedRole="PAINTER">
-      {/* Balanced layout container with matching responsiveness offsets */}
       <div className="min-h-screen bg-black text-white relative pb-24 md:pb-0 md:pl-64 transition-all duration-200">
 
-        {/* Mount centralized responsive multi-device sidebar / dock engine component */}
+        {/* Mount navigation component engine */}
         <BottomNav items={painterNavItems} />
 
-        {/* Dynamic Inner Component Dashboard Content Injector Area */}
+        {/* Dynamic Page Content Surface Area Injection Mount */}
         <main className="w-full max-w-5xl mx-auto px-4 py-6 md:py-10 animate-fade-in">
           {children}
         </main>
