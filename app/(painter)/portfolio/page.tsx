@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import AddProjectModal from "@/components/modals/AddProjectModal"; // Adjust path to match your file position
+import AddProjectModal from "@/components/modals/AddProjectModal";
+import EditProjectModal from "@/components/modals/EditProjectModal"; // ✅ Implemented clean modal mapping imports
 
 interface Project {
   id: number;
@@ -19,6 +20,11 @@ export default function PainterPortfolioPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+
+  // ✅ Track specific item state mutations for live edits
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedProjectForEdit, setSelectedProjectForEdit] = useState<Project | null>(null);
+
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
   // ==========================================================
@@ -27,7 +33,6 @@ export default function PainterPortfolioPage() {
   const fetchContractorProjects = useCallback(async () => {
     setErrorBanner(null);
     try {
-      // ✅ FIX: Target the exact key from your browser storage screenshot
       const tokenKey = "paintit_access_token";
       const activeToken = localStorage.getItem(tokenKey);
 
@@ -40,7 +45,6 @@ export default function PainterPortfolioPage() {
       const response = await fetch(`${BACKEND_URL}/api/portfolio/projects`, {
         method: "GET",
         headers: {
-          // ✅ Attaches the correct token string
           "Authorization": `Bearer ${activeToken}`,
         },
       });
@@ -59,7 +63,7 @@ export default function PainterPortfolioPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [BACKEND_URL]);
 
   // Safe async initialization routine satisfies the cascading state rule
   useEffect(() => {
@@ -77,6 +81,14 @@ export default function PainterPortfolioPage() {
       isMounted = false;
     };
   }, [fetchContractorProjects]);
+
+  // ==========================================================
+  // ⚡ ACTION INTERCEPTOR ROUTINES
+  // ==========================================================
+  const triggerEditFlow = (project: Project) => {
+    setSelectedProjectForEdit(project);
+    setIsEditModalOpen(true);
+  };
 
   return (
     <div className="w-full text-white space-y-6">
@@ -164,6 +176,18 @@ export default function PainterPortfolioPage() {
                   <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/70 backdrop-blur-md border border-neutral-800/60 rounded-full text-[10px] font-bold tracking-wide text-neutral-300">
                     📍 {project.location}
                   </div>
+
+                  {/* ⚙️ ACTION TRIGGER: Fixed overlay anchor pins seamlessly mapping item metrics */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      triggerEditFlow(project);
+                    }}
+                    className="absolute top-3 right-3 px-3 py-1.5 bg-neutral-950/80 backdrop-blur-md hover:bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-emerald-400 text-[10px] font-bold uppercase rounded-xl transition-all z-10"
+                  >
+                    ⚙️ Edit Work
+                  </button>
                 </div>
 
                 {/* Content details platform wrapper */}
@@ -214,6 +238,17 @@ export default function PainterPortfolioPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onProjectAdded={fetchContractorProjects}
+      />
+
+      {/* ✅ Master overlay gatehouse safely mounts to handle active update states */}
+      <EditProjectModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedProjectForEdit(null);
+        }}
+        project={selectedProjectForEdit}
+        onProjectUpdated={fetchContractorProjects}
       />
 
     </div>
