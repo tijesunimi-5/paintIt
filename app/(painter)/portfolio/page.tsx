@@ -19,6 +19,7 @@ export default function PainterPortfolioPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
   // ==========================================================
   // 🔄 FETCH DATA STREAM VECTOR
@@ -36,7 +37,7 @@ export default function PainterPortfolioPage() {
         return;
       }
 
-      const response = await fetch("http://localhost:5000/api/portfolio/projects", {
+      const response = await fetch(`${BACKEND_URL}/api/portfolio/projects`, {
         method: "GET",
         headers: {
           // ✅ Attaches the correct token string
