@@ -38,33 +38,40 @@ export function TrafficTracker() {
   }, [BACKEND_URL]);
 
   // 🗺️ Absolute Route Path Tracker Loop
-  useEffect(() => {
-    if (!pathname) return;
+  // Inside components/analytics/TrafficTracker.tsx
+// Replace your second useEffect loop with this session-guarded engine:
 
-    let visitorToken = localStorage.getItem("paintit_visitor_session_token");
-    if (!visitorToken) {
-      visitorToken = "vt_" + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-      localStorage.setItem("paintit_visitor_session_token", visitorToken);
+useEffect(() => {
+  if (!pathname) return;
+
+  let visitorToken = localStorage.getItem("paintit_visitor_session_token");
+  if (!visitorToken) {
+    visitorToken = "vt_" + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    localStorage.setItem("paintit_visitor_session_token", visitorToken);
+  }
+
+  let trackingType = "platform_landing";
+  let painterId: string | null = null;
+
+  const pathSegments = pathname.split("/").filter(Boolean);
+
+  if (pathSegments[0] === "painter" && pathSegments[1]) {
+    painterId = pathSegments[1];
+    trackingType = "profile_view";
+
+    if (pathSegments[2] === "designs") {
+      trackingType = "design_view";
     }
+  }
 
-    let trackingType = "platform_landing";
-    let painterId: string | null = null;
+  // ✅ CACHE BLOCKER: Formulate a unique storage tracking key identifier string
+  const sessionTrackingKey = `tracked_${trackingType}_${painterId || "platform"}`;
+  const alreadyTrackedInThisSession = sessionStorage.getItem(sessionTrackingKey);
 
-    const pathSegments = pathname.split("/").filter(Boolean);
+  const startTime = Date.now();
 
-    // Isolate painter sub-routes dynamically
-    if (pathSegments[0] === "painter" && pathSegments[1]) {
-      painterId = pathSegments[1];
-      trackingType = "profile_view";
-
-      if (pathSegments[2] === "designs") {
-        trackingType = "design_view";
-      }
-    }
-
-    const startTime = Date.now();
-
-    // Log Profile/Page Entry Instance
+  // 🚀 ONLY SEND PIN IF NOT TRACKED IN THIS SESSION BLOCK
+  if (!alreadyTrackedInThisSession) {
     fetch(`${BACKEND_URL}/api/analytics/track`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -75,32 +82,38 @@ export function TrafficTracker() {
         visitorToken,
         isExitEvent: false
       })
-    }).catch(() => null);
+    })
+    .then(() => {
+      // Set the session lock so refreshing doesn't duplicate pings o!
+      sessionStorage.setItem(sessionTrackingKey, "true");
+    })
+    .catch(() => null);
+  }
 
-    // Log Page Exit Lifespans
-    return () => {
-      const durationSeconds = Math.round((Date.now() - startTime) / 1000);
-      const exitPayload = JSON.stringify({
-        pagePath: pathname,
-        type: trackingType,
-        painterId,
-        visitorToken,
-        durationSeconds,
-        isExitEvent: true
-      });
+  // Log Page Exit Lifespans (Keep duration calculator tracking active for your admin logs!)
+  return () => {
+    const durationSeconds = Math.round((Date.now() - startTime) / 1000);
+    const exitPayload = JSON.stringify({
+      pagePath: pathname,
+      type: trackingType,
+      painterId,
+      visitorToken,
+      durationSeconds,
+      isExitEvent: true
+    });
 
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(`${BACKEND_URL}/api/analytics/track`, new Blob([exitPayload], { type: "application/json" }));
-      } else {
-        fetch(`${BACKEND_URL}/api/analytics/track`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: exitPayload,
-          keepalive: true
-        }).catch(() => null);
-      }
-    };
-  }, [pathname, BACKEND_URL]);
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(`${BACKEND_URL}/api/analytics/track`, new Blob([exitPayload], { type: "application/json" }));
+    } else {
+      fetch(`${BACKEND_URL}/api/analytics/track`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: exitPayload,
+        keepalive: true
+      }).catch(() => null);
+    }
+  };
+}, [pathname, BACKEND_URL]);
 
   return null;
 }
