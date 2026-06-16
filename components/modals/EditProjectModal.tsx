@@ -5,18 +5,19 @@ import React, { useState, useEffect, useRef } from "react";
 import { InfoTooltip } from "@/components/ui/InfoToolTip";
 
 interface Project {
-  id: number;
+  id: string; // 🎯 Change this from number to string!
   title: string;
   description: string | null;
   location: string;
   images: string[];
   colors_used: string[];
+  created_at: string;
 }
 
 interface EditProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  project: Project | null;
+  project: Project | null; // This will now match perfectly with your portfolio page!
   onProjectUpdated: () => void;
 }
 

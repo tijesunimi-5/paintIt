@@ -51,11 +51,11 @@ export default function LoginPage() {
 
       showToast({ message: "Access validated! Syncing system configuration components...", severity: "success" });
 
-      // Fires the AuthContext global state setter function with backend variables map structures
+      // ✅ FIX: Extract data.user.fullName to match what your backend auth router transmits
       login(data.accessToken, data.refreshToken, {
         id: data.user.id,
         email: data.user.email,
-        fullName: data.user.full_name,
+        fullName: data.user.fullName || data.user.full_name || "User Account",
         role: data.user.role
       });
 

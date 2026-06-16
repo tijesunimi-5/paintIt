@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { AlertProvider } from "@/context/AlertContext"; // Your active global toast alert banner component
+import { TrafficTracker } from "@/components/analytics/TrafficTracker";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -88,6 +89,7 @@ export default function RootLayout({
         {/* ✅ WRAP CHILDREN IN GLOBAL CONTEXT ENGINES */}
         <AlertProvider>
           <AuthProvider>
+            <TrafficTracker />
             {children}
           </AuthProvider>
         </AlertProvider>

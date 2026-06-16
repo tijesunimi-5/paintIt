@@ -51,8 +51,12 @@ export interface UserSessionData {
   email: string;
   fullName: string;
   role: UserRole;
-  isVerified?: boolean;
-  createdAt?: string;
+  is_verified?: boolean;
+  created_at?: string;
+  _id?: string;
+  avatarUrl?: string | null;
+  avatar_url?: string | null;
+  full_name?: string;
 }
 
 export interface UserProfileMetadata {

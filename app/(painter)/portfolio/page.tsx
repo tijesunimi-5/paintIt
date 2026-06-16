@@ -2,11 +2,13 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { useAlert } from "@/context/AlertContext";
 import AddProjectModal from "@/components/modals/AddProjectModal";
-import EditProjectModal from "@/components/modals/EditProjectModal"; // ✅ Implemented clean modal mapping imports
+import EditProjectModal from "@/components/modals/EditProjectModal";
 
 interface Project {
-  id: number;
+  id: string; // ✅ FIX 1: Updated to string to support UUID hashes correctly
   title: string;
   description: string | null;
   location: string;
@@ -16,14 +18,20 @@ interface Project {
 }
 
 export default function PainterPortfolioPage() {
+  const { user } = useAuth();
+  const { showToast } = useAlert();
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
-  // ✅ Track specific item state mutations for live edits
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedProjectForEdit, setSelectedProjectForEdit] = useState<Project | null>(null);
+
+  // ✅ FIX 2: Dynamic internal gallery lightbox state parameters
+  const [activeLightboxProject, setActiveLightboxProject] = useState<Project | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
@@ -65,7 +73,6 @@ export default function PainterPortfolioPage() {
     }
   }, [BACKEND_URL]);
 
-  // Safe async initialization routine satisfies the cascading state rule
   useEffect(() => {
     let isMounted = true;
 
@@ -90,8 +97,33 @@ export default function PainterPortfolioPage() {
     setIsEditModalOpen(true);
   };
 
+  // ✅ FIX 3: Robust Deep-Link Generation maps accurately to your active context state
+  const copyProjectDeepLink = (e: React.MouseEvent, projectId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const activeUserId = user?.id || user?._id;
+
+    if (!activeUserId) {
+      showToast({ message: "Unable to resolve active session credentials o!", severity: "error" });
+      return;
+    }
+
+    const projectDeepLink = `${window.location.origin}/painter/${activeUserId}?project=${projectId}`;
+
+    navigator.clipboard.writeText(projectDeepLink);
+    showToast({ message: "Project deep-link copied to clipboard!", severity: "success" });
+  };
+
+  const handleOpenLightbox = (project: Project) => {
+    if (project.images && project.images.length > 0) {
+      setActiveLightboxProject(project);
+      setCurrentImageIndex(0);
+    }
+  };
+
   return (
-    <div className="w-full text-white space-y-6">
+    <div className="w-full text-white space-y-6 relative">
 
       {/* Top Header Management Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-neutral-900 pb-5">
@@ -100,15 +132,13 @@ export default function PainterPortfolioPage() {
           <p className="text-xs text-neutral-500 mt-0.5">Showcase your completed site projects with photos and paint parameters to prospective clients.</p>
         </div>
 
-        {projects.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg active:scale-[0.98] shrink-0"
-          >
-            + Add Work
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg active:scale-[0.98] shrink-0"
+        >
+          + Add Work
+        </button>
       </div>
 
       {errorBanner && (
@@ -117,9 +147,7 @@ export default function PainterPortfolioPage() {
         </div>
       )}
 
-      {/* ========================================================== */}
-      {/* ⏳ CORE APP STATE ROUTING INTERCEPTORS                     */}
-      {/* ========================================================== */}
+      {/* ⏳ APP STATE ROUTING INTERCEPTORS */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 space-y-3">
           <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -127,28 +155,24 @@ export default function PainterPortfolioPage() {
         </div>
       ) : projects.length === 0 ? (
 
-        /* ✅ PREMIUM ZERO-STATE HANDLER DISPLAY */
+        /* Zero-State Handler */
         <div className="flex flex-col items-center justify-center text-center py-20 px-4 border border-dashed border-neutral-900 rounded-2xl bg-neutral-950/20 max-w-md mx-auto">
-          <div className="w-12 h-12 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-xl mb-4">
-            📸
-          </div>
+          <div className="w-12 h-12 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-xl mb-4">📸</div>
           <h3 className="text-sm font-black text-neutral-200 uppercase tracking-wide">No Projects Cataloged Yet o!</h3>
           <p className="text-xs text-neutral-500 max-w-xs mt-1.5 leading-relaxed">
-            Your workspace is completely empty. Upload high-fidelity photos of your real paint jobs to back up your experience metrics.
+            Upload high-fidelity photos of your real paint jobs to back up your experience metrics.
           </p>
           <button
             type="button"
             onClick={() => setIsModalOpen(true)}
-            className="mt-5 px-6 py-3 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-emerald-400 font-black text-xs uppercase tracking-wider rounded-xl transition-all active:scale-[0.98]"
+            className="mt-5 px-6 py-3 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-emerald-400 font-black text-xs uppercase tracking-wider rounded-xl transition-all"
           >
             Initialize First Showcase
           </button>
         </div>
       ) : (
 
-        /* ========================================================== */
-        /* 🎨 HIGH-FIDELITY PORTFOLIO IMAGE DISPLAY GRID               */
-        /* ========================================================== */
+        /* 🎨 PORTFOLIO IMAGE DISPLAY GRID */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {projects.map((project) => (
             <div
@@ -156,14 +180,17 @@ export default function PainterPortfolioPage() {
               className="group bg-neutral-950 border border-neutral-900 hover:border-neutral-800 rounded-2xl overflow-hidden flex flex-col justify-between shadow-xl transition-all duration-200"
             >
               <div>
-                {/* Visual Image Header Showcase Node */}
-                <div className="relative w-full h-48 bg-neutral-900 border-b border-neutral-900 overflow-hidden">
+                {/* Visual Image Header (Tapping this now launches the expansion swiper modal!) */}
+                <div
+                  onClick={() => handleOpenLightbox(project)}
+                  className="relative w-full h-48 bg-neutral-900 border-b border-neutral-900 overflow-hidden cursor-pointer"
+                >
                   {project.images && project.images.length > 0 ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={project.images[0]}
                       alt={project.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-[102%] transition-transform duration-300"
                     />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-neutral-600 bg-neutral-950">
@@ -172,25 +199,43 @@ export default function PainterPortfolioPage() {
                     </div>
                   )}
 
-                  {/* Floating Location Badge Element */}
-                  <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/70 backdrop-blur-md border border-neutral-800/60 rounded-full text-[10px] font-bold tracking-wide text-neutral-300">
+                  {/* Location Pin Badge */}
+                  <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/70 backdrop-blur-md border border-neutral-800/60 rounded-full text-[10px] font-bold tracking-wide text-neutral-300 select-none">
                     📍 {project.location}
                   </div>
 
-                  {/* ⚙️ ACTION TRIGGER: Fixed overlay anchor pins seamlessly mapping item metrics */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      triggerEditFlow(project);
-                    }}
-                    className="absolute top-3 right-3 px-3 py-1.5 bg-neutral-950/80 backdrop-blur-md hover:bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-emerald-400 text-[10px] font-bold uppercase rounded-xl transition-all z-10"
-                  >
-                    ⚙️ Edit Work
-                  </button>
+                  {/* Multi-Image Counter Tracker Badge */}
+                  {project.images && project.images.length > 1 && (
+                    <span className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-md text-[9px] font-black text-emerald-400 px-2 py-1 rounded-md border border-neutral-800/60 select-none tracking-wide uppercase">
+                      + {project.images.length - 1} Images
+                    </span>
+                  )}
+
+                  {/* Control Layout Action Handles */}
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+                    <button
+                      type="button"
+                      onClick={(e) => copyProjectDeepLink(e, project.id)}
+                      className="px-2.5 py-1.5 bg-neutral-950/80 backdrop-blur-md hover:bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-emerald-400 text-[10px] font-bold uppercase rounded-xl transition-all"
+                    >
+                      🔗 Link
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        triggerEditFlow(project);
+                      }}
+                      className="px-3 py-1.5 bg-neutral-950/80 backdrop-blur-md hover:bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-emerald-400 text-[10px] font-bold uppercase rounded-xl transition-all"
+                    >
+                      ⚙️ Edit
+                    </button>
+                  </div>
                 </div>
 
-                {/* Content details platform wrapper */}
+                {/* Content text metadata summary descriptions */}
                 <div className="p-5 space-y-3">
                   <div>
                     <h3 className="text-sm font-black uppercase text-neutral-200 tracking-wide group-hover:text-emerald-400 transition-colors">
@@ -201,7 +246,6 @@ export default function PainterPortfolioPage() {
                     </p>
                   </div>
 
-                  {/* Render Color Swatches Tokens Matrix */}
                   {project.colors_used && project.colors_used.length > 0 && (
                     <div className="space-y-1.5 pt-2 border-t border-neutral-900/60">
                       <span className="text-[9px] uppercase font-black tracking-widest text-neutral-600 block">Colors Used // Swatches</span>
@@ -221,8 +265,8 @@ export default function PainterPortfolioPage() {
               </div>
 
               {/* Card Meta Timeline Anchor Footer */}
-              <div className="px-5 py-3.5 bg-neutral-950 border-t border-neutral-900/40 flex items-center justify-between text-[9px] text-neutral-600 font-bold tracking-widest uppercase">
-                <span>Showcase Record ID: #{project.id}</span>
+              <div className="px-5 py-3.5 bg-neutral-950 border-t border-neutral-900/40 flex items-center justify-between text-[9px] text-neutral-600 font-bold tracking-widest uppercase select-none">
+                <span className="max-w-[180px] truncate">Showcase Record ID: #{project.id}</span>
                 <span>{new Date(project.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}</span>
               </div>
 
@@ -232,7 +276,94 @@ export default function PainterPortfolioPage() {
       )}
 
       {/* ========================================================== */}
-      {/* 🚀 MOUNTED POPUP INTERACTION CONTROLLER LAYER              */}
+      {/* 🖼️ NEW INTERNAL EXPANSION GALLERY LIGHTBOX MODAL SECTOR     */}
+      {/* ========================================================== */}
+      {activeLightboxProject && (
+        <div className="fixed inset-0 bg-black/95 z-50 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-fade-in">
+
+          <button
+            onClick={() => setActiveLightboxProject(null)}
+            className="absolute top-6 right-6 text-xs text-neutral-500 hover:text-white font-black uppercase tracking-widest border border-neutral-900 px-3 py-1.5 rounded-xl bg-neutral-950"
+          >
+            ✕ Close View
+          </button>
+
+          <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+
+            {/* Swiper Media Track Container */}
+            <div className="md:col-span-2 space-y-4">
+              <div className="w-full h-[55vh] bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden relative flex items-center justify-center shadow-2xl select-none">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={activeLightboxProject.images[currentImageIndex]}
+                  alt=""
+                  className="max-w-full max-h-full object-contain"
+                />
+
+                {/* Swiper Navigation Hotkeys */}
+                {activeLightboxProject.images.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => setCurrentImageIndex(p => p === 0 ? activeLightboxProject.images.length - 1 : p - 1)}
+                      className="absolute left-4 w-9 h-9 rounded-full bg-black/80 border border-neutral-800 text-white flex items-center justify-center text-sm font-black hover:bg-emerald-500 hover:text-black transition-all"
+                    >
+                      ←
+                    </button>
+                    <button
+                      onClick={() => setCurrentImageIndex(p => p === activeLightboxProject.images.length - 1 ? 0 : p + 1)}
+                      className="absolute right-4 w-9 h-9 rounded-full bg-black/80 border border-neutral-800 text-white flex items-center justify-center text-sm font-black hover:bg-emerald-500 hover:text-black transition-all"
+                    >
+                      →
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Strip Carousel Node Indicators */}
+              {activeLightboxProject.images.length > 1 && (
+                <div className="flex flex-wrap gap-2 items-center justify-center">
+                  {activeLightboxProject.images.map((img, index) => (
+                    <div
+                      key={index}
+                      onClick={() => setCurrentImageIndex(index)}
+                      className={`w-12 h-12 bg-neutral-900 rounded-lg overflow-hidden border-2 cursor-pointer transition-all ${currentImageIndex === index ? "border-emerald-500 scale-105" : "border-neutral-900 opacity-50"
+                        }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Sidebar Data Profile Specs */}
+            <div className="space-y-4 text-left">
+              <div>
+                <span className="text-[9px] bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded text-neutral-400 font-bold uppercase tracking-wider">Workspace Deep View</span>
+                <h2 className="text-xl font-black text-white mt-1">{activeLightboxProject.title}</h2>
+                <p className="text-[11px] text-neutral-500 mt-0.5">📍 Location Area: {activeLightboxProject.location}</p>
+              </div>
+              <p className="text-xs text-neutral-400 leading-relaxed max-h-[25vh] overflow-y-auto pr-1">{activeLightboxProject.description || "No project overview notes compiled."}</p>
+
+              {activeLightboxProject.colors_used && activeLightboxProject.colors_used.length > 0 && (
+                <div className="space-y-1.5 border-t border-neutral-900 pt-3">
+                  <span className="text-[9px] uppercase font-black text-neutral-600 block">Swatches Registered</span>
+                  <div className="flex flex-wrap gap-1">
+                    {activeLightboxProject.colors_used.map((c, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-neutral-900 border border-neutral-850 rounded text-[10px] text-neutral-400 uppercase font-semibold">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================== */}
+      {/* 🚀 MODAL OVERLAY PORTALS                                   */}
       {/* ========================================================== */}
       <AddProjectModal
         isOpen={isModalOpen}
@@ -240,7 +371,6 @@ export default function PainterPortfolioPage() {
         onProjectAdded={fetchContractorProjects}
       />
 
-      {/* ✅ Master overlay gatehouse safely mounts to handle active update states */}
       <EditProjectModal
         isOpen={isEditModalOpen}
         onClose={() => {
