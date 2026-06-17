@@ -1,8 +1,11 @@
+// app/(public)/view/layout.tsx
 "use client";
 
 import React from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation'; // ✅ Added to extract dynamic route params safely
 import { useAuth } from '@/context/AuthContext';
+import { QuickLeadPopup } from '@/components/analytics/QuickLeadPopup'; // ✅ Hooked up the capture popup
 
 export default function PublicMarketplaceLayout({
   children,
@@ -10,9 +13,13 @@ export default function PublicMarketplaceLayout({
   children: React.ReactNode;
 }) {
   const { isAuthenticated, user, logout } = useAuth();
+  const params = useParams(); // ✅ Extract dynamic painter context parameters
+
+  // Pull the unique artist hash key from the active route context mapping
+  const painterId = params?.id as string;
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex flex-col">
+    <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative">
       {/* Premium Public Marketplace Header */}
       <header className="w-full border-b border-neutral-900 bg-neutral-950/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -61,6 +68,9 @@ export default function PublicMarketplaceLayout({
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>
+
+      {/* ✅ GLOBAL CAPTURE CONTEXT: Fires on all public view sub-routes cleanly */}
+      {painterId && <QuickLeadPopup painterId={painterId} />}
     </div>
   );
 }

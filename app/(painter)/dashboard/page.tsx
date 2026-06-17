@@ -124,8 +124,8 @@ export default function PainterDashboardPage() {
     { id: 4, label: "Share Your Link", description: "Send your catalog profile directly to clients." }
   ];
 
-  // Keep safety checks stable
-  const isBrandNewAccount = !hasUploadedWork && !isProfileCompleted && (!stats || (stats.profileViews === 0 && stats.designViews === 0));
+  // ✅ FIX: Keep dashboard visible if leads exist, even if the user profile is incomplete
+  const isBrandNewAccount = !hasUploadedWork && !isProfileCompleted && leads.length === 0 && (!stats || (stats.profileViews === 0 && stats.designViews === 0));
 
   return (
     <div className="space-y-6 text-white animate-fade-in max-w-md mx-auto md:max-w-none">
@@ -169,6 +169,22 @@ export default function PainterDashboardPage() {
         </div>
       ) : (
         <div className="space-y-6">
+
+          {/* Onboarding Summary Alert (Displays only when tasks remain unfulfilled) */}
+          {(!isProfileCompleted || !hasUploadedWork) && (
+            <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-neutral-400">
+              <div>
+                <p className="font-bold text-neutral-200">🚀 Complete your onboarding workflow parameters o!</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5">Finish setup steps to optimize conversions on your catalog space.</p>
+              </div>
+              <button
+                onClick={handleTriggerProfileWizard}
+                className="px-4 py-2 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-emerald-400 font-bold rounded-xl transition-all whitespace-nowrap"
+              >
+                Complete Setup →
+              </button>
+            </div>
+          )}
 
           {/* 📊 4-Column Live KPI Block Grid Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -216,16 +232,16 @@ export default function PainterDashboardPage() {
           </div>
 
           {/* ========================================================== */}
-          {/* ⚡ NEW: ADVANCED TWO-COLUMN ANALYTICS METRIC GRID WORKSPACE */}
+          {/* ⚡ TWO-COLUMN ANALYTICS METRIC GRID WORKSPACE             */}
           {/* ========================================================== */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-            {/* Left Column: Hot Inbound Leads Feed Terminal (Takes up 2 spans) */}
+            {/* Left Column: Hot Inbound Leads Feed Terminal */}
             <div className="md:col-span-2 bg-neutral-950 border border-neutral-900 rounded-2xl p-5 space-y-4 shadow-xl">
               <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-neutral-100">Hot Customer Inquiries</h3>
-                  <p className="text-[11px] text-neutral-500 mt-0.5">Direct project specs channeled from your public links.</p>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-neutral-100">Hot Customer Inquiries & Leads</h3>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">Direct project specs and popup subscribers channeled from your public links.</p>
                 </div>
                 <span className="text-[10px] bg-neutral-900 border border-neutral-800 px-2.5 py-0.5 rounded-full text-neutral-400 font-bold select-none">
                   {leads.length} Active
@@ -238,51 +254,60 @@ export default function PainterDashboardPage() {
                   <p className="text-[11px] text-neutral-700">Share your business profile link on WhatsApp to generate bids.</p>
                 </div>
               ) : (
-                <div className="space-y-2.5 max-h-[40vh] overflow-y-auto pr-1">
-                  {leads.map((lead) => (
-                    <div
-                      key={lead.id}
-                      className="p-4 bg-neutral-900/40 border border-neutral-900 rounded-xl space-y-2 transition-colors hover:bg-neutral-900/70"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                        <div>
-                          <span className="text-xs font-black tracking-tight text-neutral-200">{lead.client_name}</span>
-                          <span className="text-[9px] ml-2 text-neutral-500 uppercase tracking-widest bg-neutral-950 border border-neutral-850 px-1.5 py-0.5 rounded">
-                            {lead.conversion_source?.replace("_", " ")}
+                <div className="space-y-2.5 max-h-[48vh] overflow-y-auto pr-1">
+                  {leads.map((lead) => {
+                    const isPopupLead = lead.conversion_source === "CLIENT_POPUP" || lead.conversion_source === "POPUP_CAPTURE";
+
+                    return (
+                      <div
+                        key={lead.id}
+                        className="p-4 bg-neutral-900/40 border border-neutral-900 rounded-xl space-y-2 transition-colors hover:bg-neutral-900/70"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                          <div>
+                            <span className="text-xs font-black tracking-tight text-neutral-200">
+                              {lead.client_name || "Anonymous Visitor"}
+                            </span>
+                            <span className={`text-[9px] ml-2 uppercase tracking-widest border px-1.5 py-0.5 rounded ${isPopupLead
+                              ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-400"
+                              : "bg-neutral-950 border-neutral-850 text-neutral-500"
+                              }`}>
+                              {isPopupLead ? "🎯 Popup Subscriber" : lead.conversion_source?.replace("_", " ")}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-neutral-500 font-medium">
+                            {new Date(lead.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                           </span>
                         </div>
-                        <span className="text-[10px] text-neutral-500 font-medium">
-                          {new Date(lead.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </span>
-                      </div>
 
-                      <p className="text-[11px] text-neutral-400 leading-relaxed italic bg-black/20 p-2.5 rounded-lg border border-neutral-900/40">
-                        &apos;{lead.project_description}&apos;
-                      </p>
+                        <p className="text-[11px] text-neutral-400 leading-relaxed italic bg-black/20 p-2.5 rounded-lg border border-neutral-900/40">
+                          &apos;{lead.project_description}&apos;
+                        </p>
 
-                      <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] border-t border-neutral-900/60 mt-2">
-                        {lead.isLocked ? (
-                          <span className="text-neutral-500 font-bold flex items-center gap-1 select-none">
-                            🔒 Upgrade to free tier preview details
-                          </span>
-                        ) : (
-                          <>
-                            <span className="text-neutral-400 font-medium">✉️ <span className="select-all text-neutral-300 font-mono">{lead.client_email}</span></span>
-                            {lead.client_phone && (
-                              <a
-                                href={`https://wa.me/${lead.client_phone.replace(/\s+/g, '')}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-emerald-400 font-bold hover:underline flex items-center gap-0.5"
-                              >
-                                💬 WhatsApp Line: {lead.client_phone}
-                              </a>
-                            )}
-                          </>
-                        )}
+                        <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] border-t border-neutral-900/60 mt-2">
+                          {lead.isLocked ? (
+                            <span className="text-neutral-500 font-bold flex items-center gap-1 select-none">
+                              🔒 Upgrade to premium tier to view contact credentials o!
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-neutral-400 font-medium">✉️ <span className="select-all text-neutral-300 font-mono">{lead.client_email}</span></span>
+                              {lead.client_phone && !isPopupLead && (
+                                <a
+                                  href={`https://wa.me/${lead.client_phone.replace(/\s+/g, '')}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-emerald-400 font-bold hover:underline flex items-center gap-0.5"
+                                >
+                                  💬 WhatsApp Line: {lead.client_phone}
+                                </a>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
