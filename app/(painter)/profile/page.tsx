@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext"; // ✅ Added to call unified logout hook
 import { InfoTooltip } from "@/components/ui/InfoToolTip";
 
 interface UserProfile {
@@ -19,6 +20,8 @@ interface UserProfile {
 }
 
 export default function AccountProfileWorkspacePage() {
+  const { logout, user: authUser } = useAuth(); // ✅ Destructured authentication context utilities
+
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [fullName, setFullName] = useState("");
   const [bio, setBio] = useState("");
@@ -26,6 +29,10 @@ export default function AccountProfileWorkspacePage() {
   const [location, setLocation] = useState("");
   const [experienceYears, setExperienceYears] = useState<number>(0);
   const [skillsInput, setSkillsInput] = useState("");
+
+  // 🖼️ Avatar Management Upload States
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -58,6 +65,9 @@ export default function AccountProfileWorkspacePage() {
           setLocation(p.location || "Ibadan, Nigeria");
           setExperienceYears(p.experience_years || 0);
           setSkillsInput(p.skills?.join(", ") || "");
+
+          // Hydrate avatar url from global context mapping fallback if missing on standard profile model
+          setAvatarUrl(data.profile.avatar_url || localStorage.getItem("paintit_avatar_cache") || null);
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Profile synchronization dropped.";
@@ -69,6 +79,60 @@ export default function AccountProfileWorkspacePage() {
 
     fetchActiveProfileSettings();
   }, [BACKEND_URL]);
+
+  // ==========================================================
+  // ☁️ CLOUDINARY MEDIA STREAM BINARY UPLOADER
+  // ==========================================================
+  const handleAvatarFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Structure validation defenses prior to chunk stream serialization
+    if (file.size > 3 * 1024 * 1024) {
+      setFeedbackBanner({ type: "error", msg: "Image size threshold exceeded. Keep images below 3MB." });
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    setFeedbackBanner(null);
+
+    const mediaPayload = new FormData();
+    mediaPayload.append("file", file);
+    mediaPayload.append("upload_preset", "paintit_unsigned_preset"); // Ensure unsigned uploads are active on Cloudinary settings dashboard
+
+    try {
+      // 1. Direct Cloudinary Node ingestion endpoint fetch request
+      const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`, {
+        method: "POST",
+        body: mediaPayload,
+      });
+
+      if (!cloudinaryRes.ok) throw new Error("Asset transformation pipeline dropped via Cloudinary.");
+      const uploadResult = await cloudinaryRes.json();
+      const safeSecureUrl = uploadResult.secure_url;
+
+      // 2. Synchronize Cloudinary url string references directly back into Express profile schema
+      const backendSyncRes = await fetch(`${BACKEND_URL}/api/profile/avatar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("paintit_access_token")}`,
+        },
+        body: JSON.stringify({ avatarUrl: safeSecureUrl }),
+      });
+
+      if (!backendSyncRes.ok) throw new Error("Failed to register image address location coordinates with backend server.");
+
+      setAvatarUrl(safeSecureUrl);
+      localStorage.setItem("paintit_avatar_cache", safeSecureUrl);
+      setFeedbackBanner({ type: "success", msg: "Studio branding asset updated successfully o!" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Media stream interface error.";
+      setFeedbackBanner({ type: "error", msg });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   // ==========================================================
   // 💾 SAVE MUTATED RE-CONFIGURATIONS (UPSERT EXECUTOR)
@@ -91,7 +155,7 @@ export default function AccountProfileWorkspacePage() {
           "Authorization": `Bearer ${localStorage.getItem("paintit_access_token")}`,
         },
         body: JSON.stringify({
-          bio: bio, // Passes raw string state natively (empty fields go as "")
+          bio: bio,
           phoneNumber: phoneNumber || null,
           location: location || null,
           experienceYears: Number(experienceYears) || 0,
@@ -102,7 +166,6 @@ export default function AccountProfileWorkspacePage() {
       const data = await response.json();
 
       if (!response.ok) {
-        // ✅ UI CLARITY FIX: If the backend returns explicit Zod details, display them directly to the user!
         if (data.details && Array.isArray(data.details)) {
           throw new Error(`Validation Error: ${data.details.join(" | ")}`);
         }
@@ -132,24 +195,69 @@ export default function AccountProfileWorkspacePage() {
   }
 
   return (
-    <div className="w-full text-white space-y-6 max-w-2xl mx-auto md:mx-0">
+    <div className="w-full text-white space-y-6 max-w-2xl mx-auto md:mx-0 pb-20">
 
-      {/* Page Title Context Node */}
-      <div className="border-b border-neutral-900 pb-5">
-        <h1 className="text-xl font-black tracking-tight text-neutral-100">Account Master Settings</h1>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          Configure public biography descriptions, experience fields, and core communication channels.
-        </p>
+      {/* Page Title Context Node Header */}
+      <div className="flex items-center justify-between border-b border-neutral-900 pb-5">
+        <div>
+          <h1 className="text-xl font-black tracking-tight text-neutral-100">Account Master Settings</h1>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Configure public biography descriptions, experience fields, and core communication channels.
+          </p>
+        </div>
+
+        {/* ✅ MOBILE VIEW LOGOUT COMPONENT BUTTON: Displays strictly below sm (768px break limits) */}
+        <button
+          type="button"
+          onClick={logout}
+          className="block sm:hidden px-3.5 py-2 bg-red-950/20 active:bg-red-950/40 border border-red-900/30 text-red-400 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md shrink-0"
+        >
+          Logout 👋
+        </button>
       </div>
 
       {feedbackBanner && (
         <div className={`p-3.5 text-xs rounded-xl border font-medium ${feedbackBanner.type === "success"
-            ? "bg-emerald-950/20 border-emerald-900/40 text-emerald-400"
-            : "bg-red-950/20 border-red-900/40 text-red-400"
+          ? "bg-emerald-950/20 border-emerald-900/40 text-emerald-400"
+          : "bg-red-950/20 border-red-900/40 text-red-400"
           }`}>
           {feedbackBanner.type === "success" ? "✅" : "⚠️"} {feedbackBanner.msg}
         </div>
       )}
+
+      {/* ✅ HIGH-FIDELITY AVATAR MANAGEMENT COMPONENT BLOCK CARD */}
+      <div className="p-6 bg-neutral-950 border border-neutral-900 rounded-2xl flex flex-col sm:flex-row items-center gap-5 shadow-2xl relative overflow-hidden">
+        <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-xl text-emerald-400 tracking-widest relative overflow-hidden shrink-0 group select-none shadow-inner">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatarUrl} alt="Avatar profile view" className="w-full h-full object-cover" />
+          ) : (
+            <span>{fullName.charAt(0).toUpperCase() || "P"}</span>
+          )}
+          {isUploadingAvatar && (
+            <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+              <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2 text-center sm:text-left w-full sm:w-auto">
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-wider text-neutral-200">Studio Branding Imagery</h3>
+            <p className="text-[11px] text-neutral-500 mt-0.5">Upload a clean high-resolution face portrait photo or company logo vector.</p>
+          </div>
+          <label className="inline-block cursor-pointer px-4 py-2 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-300 hover:text-emerald-400 text-[10px] font-black uppercase tracking-wider rounded-xl transition-colors select-none">
+            {isUploadingAvatar ? "Processing File Stream..." : "Choose Photo Image"}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={isUploadingAvatar}
+              onChange={handleAvatarFileSelection}
+              className="hidden"
+            />
+          </label>
+        </div>
+      </div>
 
       <form onSubmit={handleProfileSave} className="space-y-5 bg-neutral-950 border border-neutral-900 rounded-2xl p-6 shadow-2xl">
 
@@ -183,7 +291,7 @@ export default function AccountProfileWorkspacePage() {
           <div>
             <label className="text-[10px] uppercase font-black tracking-wider text-neutral-400 block mb-1.5">Contact Line (WhatsApp / Tel)</label>
             <input
-              type="tel"
+              type="text"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               placeholder="e.g., +234 812 345 6789"
@@ -235,7 +343,6 @@ export default function AccountProfileWorkspacePage() {
               className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500/30 transition-colors"
             />
 
-            {/* Visual Skill Badge Swatches Row */}
             {skillsInput.trim().length > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1.5">
                 {skillsInput.split(",").map((skill, index) => {
