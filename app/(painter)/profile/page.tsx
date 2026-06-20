@@ -98,7 +98,7 @@ export default function AccountProfileWorkspacePage() {
 
     const mediaPayload = new FormData();
     mediaPayload.append("file", file);
-    mediaPayload.append("upload_preset", "paintit_unsigned_preset"); // Ensure unsigned uploads are active on Cloudinary settings dashboard
+    mediaPayload.append("upload_preset", "paintIt-portfolio"); // Ensure unsigned uploads are active on Cloudinary settings dashboard
 
     try {
       // 1. Direct Cloudinary Node ingestion endpoint fetch request
