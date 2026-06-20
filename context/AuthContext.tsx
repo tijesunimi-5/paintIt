@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserSessionData, UserRole } from '@/types/index';
+import { UserSessionData } from '@/types/index';
 
 interface AuthContextType {
   user: UserSessionData | null;
@@ -13,11 +13,11 @@ interface AuthContextType {
   login: (accessToken: string, refreshToken: string, userData: UserSessionData) => void;
   logout: () => Promise<void>;
   refreshSession: () => Promise<boolean>;
+  updateUser: (updatedData: Partial<UserSessionData>) => void; // ✅ Centralized updater tool
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Absolute fallback backend origin pointer mapping to your local Express server
 const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -26,7 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
   const router = useRouter();
 
-  // On initialization, verify if a persistent token signature is active inside the client lifecycle
+  // Load the initial session cache when the application boots up
   useEffect(() => {
     const initializeAuth = async () => {
       const storedToken = localStorage.getItem('paintit_access_token');
@@ -49,11 +49,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('paintit_refresh_token', refresh);
     localStorage.setItem('paintit_user_data', JSON.stringify(userData));
 
-    // Dynamic role sorting authorization rules routing
-    if (userData.role === 'PAINTER') {
+    if (userData.role === 'PAINTER' || userData.role === 'CONSUMER') {
       router.push('/dashboard');
-    } else if (userData.role === 'CONSUMER') {
-      router.push('/dashboard'); // Routes to homeowner workspace layout automatically
     } else {
       router.push('/');
     }
@@ -68,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     } catch (err) {
-      console.error("Session logout cleanup communication exception:", err);
+      console.error("Session logout cleanup communication failure:", err);
     } finally {
       setAccessToken(null);
       setUser(null);
@@ -104,6 +101,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // ✅ Centralized context broadcast engine
+  const updateUser = (updatedData: Partial<UserSessionData>) => {
+    setUser((prevUser) => {
+      if (!prevUser) return null;
+
+      const mergedUser = { ...prevUser, ...updatedData };
+      // Save the updated object back to the browser disk cache
+      localStorage.setItem('paintit_user_data', JSON.stringify(mergedUser));
+      return mergedUser;
+    });
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -112,7 +121,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated: !!accessToken,
       login,
       logout,
-      refreshSession
+      refreshSession,
+      updateUser // Exposed globally
     }}>
       {children}
     </AuthContext.Provider>
@@ -122,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth framework call parameter must be nested inside an AuthProvider boundary context module.');
+    throw new Error('useAuth must be used within an AuthProvider.');
   }
   return context;
 };

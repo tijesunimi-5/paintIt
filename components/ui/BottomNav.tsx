@@ -20,10 +20,16 @@ export const BottomNav: React.FC<NavigationProps> = ({ items }) => {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
+  const targetName = user?.fullName || user?.full_name || "";
+  const nameInitialLetter = targetName.trim() ? targetName.trim().charAt(0).toUpperCase() : "P";
+
+  // ✅ Centralized context handles image links cleanly using either naming format
+  const userAvatarImageSrc = user?.avatarUrl || user?.avatar_url || null;
+
   return (
     <>
       {/* ========================================================== */}
-      {/* 🖥️ DESKTOP LEFT SIDEBAR LAYOUT                           */}
+      {/* 🖥️ DESKTOP LEFT SIDEBAR LAYOUT                            */}
       {/* ========================================================== */}
       <aside className="hidden md:flex fixed top-0 left-0 bottom-0 w-64 bg-neutral-950 border-r border-neutral-900/80 flex-col justify-between p-5 z-30">
         <div className="w-full">
@@ -61,7 +67,7 @@ export const BottomNav: React.FC<NavigationProps> = ({ items }) => {
           </nav>
         </div>
 
-        {/* 👤 NEW: Desktop Sidebar Profile & Account Management Footer Footer */}
+        {/* 👤 Desktop Sidebar Profile Footer Section */}
         <div className="border-t border-neutral-900 pt-4 space-y-3">
           <Link
             href="/profile"
@@ -70,13 +76,23 @@ export const BottomNav: React.FC<NavigationProps> = ({ items }) => {
                 : "border-transparent hover:bg-neutral-900/40"
               }`}
           >
-            {/* Minimalistic Alpha Character Avatar Profile Circle */}
-            <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-black uppercase shrink-0">
-              {user?.fullName ? user.fullName.charAt(0) : "P"}
+            {/* ✅ FIXED: Dynamic picture frame wrapper with automated text initial fallback */}
+            <div className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-xs font-black uppercase text-emerald-400 shrink-0 overflow-hidden shadow-inner select-none">
+              {userAvatarImageSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={userAvatarImageSrc}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{nameInitialLetter}</span>
+              )}
             </div>
+
             <div className="min-w-0 flex-1">
               <h4 className="text-xs font-black text-neutral-200 truncate leading-tight">
-                {user?.fullName || "Active Contractor"}
+                {targetName || "Active Painter"}
               </h4>
               <span className="text-[9px] text-neutral-500 font-bold tracking-wider uppercase truncate block mt-0.5">
                 View Profile Settings
@@ -95,7 +111,7 @@ export const BottomNav: React.FC<NavigationProps> = ({ items }) => {
       </aside>
 
       {/* ========================================================== */}
-      {/* 📱 MOBILE FLOATING BOTTOM DOCK LAYOUT                   */}
+      {/* 📱 MOBILE FLOATING BOTTOM DOCK LAYOUT                    */}
       {/* ========================================================== */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black via-black/90 to-transparent z-40 px-4 flex items-center justify-center pb-safe-bottom">
         <div className="w-full max-w-sm h-12 bg-neutral-900/80 border border-neutral-800/60 rounded-xl backdrop-blur-md flex items-center justify-around px-1 shadow-2xl">
@@ -118,16 +134,22 @@ export const BottomNav: React.FC<NavigationProps> = ({ items }) => {
             );
           })}
 
-          {/* ✅ MOBILE ADDITION: Explicit direct route hook for Profile configuration */}
+          {/* 📱 MOBILE PROFILE NAVIGATION TRIGGER */}
           <Link
             href="/profile"
-            className={`flex flex-col items-center justify-center flex-1 h-full rounded-lg transition-all ${pathname === "/profile" ? "text-emerald-400 font-bold" : "text-neutral-500"
+            className={`flex flex-col items-center justify-center flex-1 h-full rounded-lg transition-all gap-0.5 ${pathname === "/profile" ? "text-emerald-400 font-bold" : "text-neutral-500"
               }`}
           >
-            <span className="text-[10px] uppercase font-bold tracking-wider">Profile</span>
-            {pathname === "/dashboard/profile" && (
-              <span className="w-4 h-[2px] bg-emerald-400 rounded-full mt-0.5" />
-            )}
+            {/* ✅ FIXED: Mobile profile option displays user's mini profile circle directly on the bottom navigation strip */}
+            <div className="w-4 h-4 rounded-full bg-neutral-950 border border-neutral-800 flex items-center justify-center text-[8px] font-black uppercase text-emerald-400 shrink-0 overflow-hidden select-none">
+              {userAvatarImageSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={userAvatarImageSrc} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span>{nameInitialLetter}</span>
+              )}
+            </div>
+            <span className="text-[9px] uppercase font-bold tracking-wider">Profile</span>
           </Link>
         </div>
       </div>
