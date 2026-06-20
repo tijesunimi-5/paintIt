@@ -14,7 +14,7 @@ export default function ClientGroupDashboardLayout({ children }: { children: Rea
   const navigationTabs = [
     { name: "Design Hub", path: "/hub", icon: "🏠" },
     { name: "Explore Painters", path: "/search/painters", icon: "🔍" },
-    { name: "Visualizer Canvas", path: "/dashboard/designs", icon: "🎨" },
+    { name: "Visualizer Canvas", path: "/designs", icon: "🎨" },
   ];
 
   return (
