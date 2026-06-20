@@ -30,6 +30,20 @@ interface InboundLead {
   isLocked?: boolean;
 }
 
+// ✅ FIX 1: Explicitly tracking database profile completeness states
+interface ProfileCompletenessData {
+  bio: string | null;
+  location: string | null;
+  skills: string[];
+}
+
+interface ProfileCompletenessCheck {
+  id: string;
+  label: string;
+  isComplete: boolean;
+  nudgeText: string;
+}
+
 export default function PainterDashboardPage() {
   const { user, accessToken } = useAuth();
   const { showToast } = useAlert();
@@ -39,6 +53,13 @@ export default function PainterDashboardPage() {
   const [leads, setLeads] = useState<InboundLead[]>([]);
   const [isPlanQualified, setIsPlanQualified] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // ✅ FIX 2: Added state to safely track incoming backend profile metrics
+  const [onboardingMeta, setOnboardingMeta] = useState<ProfileCompletenessData>({
+    bio: null,
+    location: null,
+    skills: []
+  });
 
   const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -65,8 +86,15 @@ export default function PainterDashboardPage() {
 
           const metricsSource = overviewData.contentMetrics || overviewData.data || {};
           setContentMetrics({
-            totalProjects: parseInt(metricsSource.totalProjects || metricsSource.total_projects || 0),
-            totalImages: parseInt(metricsSource.totalImages || metricsSource.total_images || 0)
+            totalProjects: parseInt(metricsSource.totalProjects || metricsSource.total_projects || "0", 10),
+            totalImages: parseInt(metricsSource.totalImages || metricsSource.total_images || "0", 10)
+          });
+
+          // ✅ FIX 3: Pull dynamic db fields sent down from your backend overview object fallback
+          setOnboardingMeta({
+            bio: metricsSource.bio || overviewData.bio || null,
+            location: metricsSource.location || overviewData.location || null,
+            skills: overviewData.skills || metricsSource.skills || []
           });
         }
 
@@ -113,9 +141,45 @@ export default function PainterDashboardPage() {
   const nameInitialLetter = targetName.trim() ? targetName.trim().charAt(0).toUpperCase() : "P";
   const userAvatarImageSrc = user?.avatarUrl || user?.avatar_url || null;
 
-  const isProfileCompleted = displayFirstName !== "Contractor";
+  // 🧠 SECURE PROFILE VERIFICATION CALCULATIONS USING EXTRACTED BACKEND VALUES
+  const isProfileCompleted = displayFirstName !== "Contractor" && !!targetName;
+  const isBioConfigured = !!onboardingMeta.bio;
+  const isLocationConfigured = !!onboardingMeta.location;
   const hasUploadedWork = contentMetrics.totalProjects > 0 || contentMetrics.totalImages > 0;
   const hasPublishedCanvas = (stats?.designViews || 0) > 0;
+
+  // 📋 UPDATED CHECKLIST WITH STRONGER UPWORK-STYLE RETENTION COPY
+  const onboardingChecklist: ProfileCompletenessCheck[] = [
+    {
+      id: "avatar",
+      label: "Upload Profile Avatar",
+      isComplete: !!userAvatarImageSrc,
+      nudgeText: "Profiles with clear business branding generate up to 85% higher trust scores o!"
+    },
+    {
+      id: "location",
+      label: "Map Operational Base",
+      isComplete: isLocationConfigured,
+      nudgeText: "Required for visibility in area filter catalogs (e.g., Ibadan, Akobo)."
+    },
+    {
+      id: "bio",
+      label: "Write Studio Biography",
+      isComplete: isBioConfigured,
+      nudgeText: "Explain your finishing techniques to turn catalog traffic into secure job leads."
+    },
+    {
+      id: "projects",
+      label: "Publish Showcase Imagery",
+      isComplete: hasUploadedWork,
+      nudgeText: "Add your real satin or velvet stucco project history entries to unlock validation."
+    }
+  ];
+
+  const pendingOnboardingTasks = onboardingChecklist.filter(item => !item.isComplete);
+  const totalOnboardingCount = onboardingChecklist.length;
+  const completedOnboardingCount = totalOnboardingCount - pendingOnboardingTasks.length;
+  const profileCompletenessScore = Math.round((completedOnboardingCount / totalOnboardingCount) * 100);
 
   const dashboardSetupSteps: OnboardingStep[] = [
     { id: 1, label: `Complete Profile ${isProfileCompleted ? "✅" : ""}`, description: "Identity parameters mapped safely." },
@@ -124,11 +188,10 @@ export default function PainterDashboardPage() {
     { id: 4, label: "Share Your Link", description: "Send your catalog profile directly to clients." }
   ];
 
-  // ✅ FIX: Keep dashboard visible if leads exist, even if the user profile is incomplete
   const isBrandNewAccount = !hasUploadedWork && !isProfileCompleted && leads.length === 0 && (!stats || (stats.profileViews === 0 && stats.designViews === 0));
 
   return (
-    <div className="space-y-6 text-white animate-fade-in max-w-md mx-auto md:max-w-none">
+    <div className="space-y-6 text-white animate-fade-in max-w-md mx-auto md:max-w-none pb-12 selection:bg-emerald-500 selection:text-black">
 
       {/* Header Context Block */}
       <div className="flex items-center justify-between border-b border-neutral-900 pb-4">
@@ -170,19 +233,62 @@ export default function PainterDashboardPage() {
       ) : (
         <div className="space-y-6">
 
-          {/* Onboarding Summary Alert (Displays only when tasks remain unfulfilled) */}
-          {(!isProfileCompleted || !hasUploadedWork) && (
-            <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-neutral-400">
-              <div>
-                <p className="font-bold text-neutral-200">🚀 Complete your onboarding workflow parameters o!</p>
-                <p className="text-[11px] text-neutral-500 mt-0.5">Finish setup steps to optimize conversions on your catalog space.</p>
+          {/* ⚡ CANONICAL UPWORK-STYLE COMPLETENESS NUDGE WIDGET */}
+          {pendingOnboardingTasks.length > 0 && (
+            // ✅ FIX 4: Applied Tailwind CSS v4 canonical updates (bg-linear-to-br & from-neutral-950/2)
+            <div className="p-5 border border-amber-500/10 bg-linear-to-br from-amber-500/2 via-neutral-950 to-neutral-950 rounded-2xl space-y-4 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/2 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-900 pb-3">
+                <div className="space-y-1">
+                  <h3 className="text-xs font-black text-amber-400 uppercase tracking-wide flex items-center gap-1.5 select-none">
+                    ⚠️ Optimization Deficit Tracker
+                  </h3>
+                  <p className="text-[11px] text-neutral-400 leading-relaxed max-w-2xl font-medium">
+                    Incomplete profile layouts trigger a decrease in search positioning. Resolve the matching parameters below to maximize visibility when clients query contractors.
+                  </p>
+                </div>
+                <div className="text-left sm:text-right shrink-0">
+                  <span className="text-[9px] font-mono font-bold text-neutral-500 uppercase tracking-wider block">Completeness</span>
+                  <span className="text-lg font-mono font-black text-amber-400">{profileCompletenessScore}%</span>
+                </div>
               </div>
-              <button
-                onClick={handleTriggerProfileWizard}
-                className="px-4 py-2 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-emerald-400 font-bold rounded-xl transition-all whitespace-nowrap"
-              >
-                Complete Setup →
-              </button>
+
+              {/* Progress Slider Track */}
+              <div className="w-full bg-neutral-900 rounded-full h-1 overflow-hidden">
+                <div
+                  className="bg-amber-400 h-1 rounded-full transition-all duration-500"
+                  style={{ width: `${profileCompletenessScore}%` }}
+                />
+              </div>
+
+              {/* Action Pending Items Grid Mapping */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                {pendingOnboardingTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="p-3.5 bg-neutral-950 border border-neutral-900 rounded-xl flex items-start gap-3 transition-colors hover:border-neutral-850"
+                  >
+                    <div className="w-4 h-4 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-mono text-[9px] font-black text-amber-400 mt-0.5 select-none shrink-0" >
+                      !
+                    </div>
+                    <div>
+                      <h4 className="text-[11px] font-black text-neutral-200 uppercase tracking-wide">{task.label}</h4>
+                      <p className="text-[10px] text-neutral-500 leading-relaxed mt-0.5 font-medium">{task.nudgeText}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleTriggerProfileWizard}
+                  className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-black text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md"
+                >
+                  Complete Onboarding Deck ➔
+                </button>
+              </div>
             </div>
           )}
 
@@ -285,7 +391,7 @@ export default function PainterDashboardPage() {
                         </p>
 
                         <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] border-t border-neutral-900/60 mt-2">
-                          {lead.isLocked ? (
+                          {lead.isLocked || !isPlanQualified ? (
                             <span className="text-neutral-500 font-bold flex items-center gap-1 select-none">
                               🔒 Upgrade to premium tier to view contact credentials o!
                             </span>

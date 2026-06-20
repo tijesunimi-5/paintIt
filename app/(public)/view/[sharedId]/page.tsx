@@ -1,4 +1,4 @@
-// app/(public)/view/[sharedId]/page.tsx
+// app/(public)/view/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -12,6 +12,7 @@ interface PublicProfileData {
   location: string | null;
   experience_years: number;
   skills: string[];
+  avatar_url: string | null;
 }
 
 interface PortfolioProject {
@@ -26,13 +27,15 @@ interface PortfolioProject {
 
 export default function PublicProfilePage() {
   const params = useParams();
-  const targetId = (params?.sharedId || params?.id) as string;
+
+  // ✅ FIX 1: Defensively fall back between id and sharedId to guarantee path matching
+  const targetId = (params?.id || params?.sharedId) as string;
 
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioProject[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 🖼️ Live Expansion Gallery Lightbox States (Copied from your Portfolio code)
+  // 🖼️ Live Expansion Gallery Lightbox States
   const [activeLightboxProject, setActiveLightboxProject] = useState<PortfolioProject | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
@@ -104,9 +107,21 @@ export default function PublicProfilePage() {
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-2xl text-emerald-400 select-none shadow-inner">
-              {profile.full_name.charAt(0).toUpperCase()}
+
+            {/* ✅ FIX 2: Safely switches between real Cloudinary images and text fallback initials instantly */}
+            <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-2xl text-emerald-400 select-none shadow-inner overflow-hidden shrink-0">
+              {profile.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.full_name}
+                  className="w-full h-full object-cover animate-fade-in"
+                />
+              ) : (
+                <span>{profile.full_name.charAt(0).toUpperCase()}</span>
+              )}
             </div>
+
             <div>
               <h1 className="text-xl font-black uppercase tracking-wide text-neutral-100">{profile.full_name}</h1>
               <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-neutral-500">
@@ -168,7 +183,6 @@ export default function PublicProfilePage() {
                 className="group bg-neutral-950 border border-neutral-900 hover:border-neutral-800 rounded-2xl overflow-hidden flex flex-col justify-between shadow-xl transition-all duration-200"
               >
                 <div>
-                  {/* Image Trigger Node for Gallery */}
                   <div
                     onClick={() => handleOpenLightbox(project)}
                     className="relative w-full h-48 bg-neutral-900 border-b border-neutral-900 overflow-hidden cursor-pointer"
@@ -197,7 +211,6 @@ export default function PublicProfilePage() {
                     )}
                   </div>
 
-                  {/* Descriptions Card Bottom */}
                   <div className="p-5 space-y-3">
                     <div>
                       <h3 className="text-sm font-black uppercase text-neutral-200 tracking-wide group-hover:text-emerald-400 transition-colors">
@@ -241,9 +254,7 @@ export default function PublicProfilePage() {
         )}
       </div>
 
-      {/* ========================================================== */}
-      {/* 🖼️ LIGHTBOX MODAL (Copied straight from painter/portfolio)  */}
-      {/* ========================================================== */}
+      {/* 🖼️ LIGHTBOX MODAL */}
       {activeLightboxProject && (
         <div className="fixed inset-0 bg-black/95 z-50 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-fade-in">
 
