@@ -4,16 +4,25 @@
 import React, { useState, useEffect, Suspense, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Canvas, ThreeEvent } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useAuth } from "@/context/AuthContext";
 import { useAlert } from "@/context/AlertContext";
 import ConfirmModal from "@/components/modals/ConfirmModal";
-import { useGLTF } from "@react-three/drei";
 
 interface RoomProps {
   roomColors: Record<string, string>;
   onSurfaceClick: (surfaceKey: string) => void;
+}
+
+interface MasterTemplateCatalogItem {
+  id: string;
+  title: string;
+  category: string;
+  model_url: string;
+  plan_type: string;
+  price: string;
+  thumbnail_icon: string;
 }
 
 function LiveRoomPlanes({ roomColors, onSurfaceClick }: RoomProps) {
@@ -96,7 +105,6 @@ function LiveRoomPlanes({ roomColors, onSurfaceClick }: RoomProps) {
   );
 }
 
-// Separate component to handle future GLTF Custom Models cleanly without explicit any tags
 interface BlenderMeshProps {
   modelUrl: string;
   surfaceStates: Record<string, string>;
@@ -104,8 +112,6 @@ interface BlenderMeshProps {
 }
 
 function CustomBlenderModelMesh({ modelUrl, surfaceStates, onTargetSelect }: BlenderMeshProps) {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  // const { useGLTF } = require("@react-three/drei");
   const { scene } = useGLTF(modelUrl);
 
   useEffect(() => {
@@ -139,8 +145,8 @@ export default function WorkspacePage() {
   const { showToast } = useAlert();
 
   const templateId = searchParams?.get("template") || "tmpl_living_lux";
-  const existingId = searchParams?.get("id") || null;
 
+  const [activeDesignId, setActiveDesignId] = useState<string | null>(null);
   const [designTitle, setDesignTitle] = useState<string>("My New Custom Room");
   const [activeSurface, setActiveSurface] = useState<string>("wallBack");
   const [activeColor, setActiveColor] = useState<string>("#047857");
@@ -172,9 +178,14 @@ export default function WorkspacePage() {
 
   useEffect(() => {
     let isMounted = true;
+    const urlDesignId = searchParams?.get("id") || null;
 
     const syncStudioContext = async () => {
       try {
+        if (urlDesignId && isMounted) {
+          setActiveDesignId(urlDesignId);
+        }
+
         const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog`);
         let activeTitle = "Custom Room Layout";
         let premiumFlag = false;
@@ -182,11 +193,13 @@ export default function WorkspacePage() {
 
         if (catalogRes.ok) {
           const catData = await catalogRes.json();
-          const activeTemplate = (catData.catalog || []).find((item: { id: string; title?: string; plan_type?: string; model_url?: string }) => item.id === templateId);
+          const activeTemplate = (catData.catalog || []).find(
+            (item: MasterTemplateCatalogItem) => item.id === templateId
+          );
           if (activeTemplate) {
             activeTitle = activeTemplate.title;
             premiumFlag = activeTemplate.plan_type !== "FREE";
-            if (activeTemplate.model_url && activeTemplate.model_url.endsWith(".glb")) {
+            if (activeTemplate.model_url && activeTemplate.model_url.trim() !== "") {
               activeModelPath = activeTemplate.model_url;
             }
           }
@@ -198,8 +211,8 @@ export default function WorkspacePage() {
           setModelUrl(activeModelPath);
         }
 
-        if (existingId && accessToken) {
-          const res = await fetch(`${BACKEND_API_URL}/api/visualizations/${existingId}`, {
+        if (urlDesignId && accessToken) {
+          const res = await fetch(`${BACKEND_API_URL}/api/visualizations/${urlDesignId}`, {
             method: "GET",
             headers: { "Authorization": `Bearer ${accessToken}` }
           });
@@ -222,7 +235,7 @@ export default function WorkspacePage() {
 
     syncStudioContext();
     return () => { isMounted = false; };
-  }, [templateId, existingId, accessToken, BACKEND_API_URL]);
+  }, [templateId, accessToken, BACKEND_API_URL, searchParams]);
 
   const handleSurfaceSelection = (surfaceKey: string) => {
     setActiveSurface(surfaceKey);
@@ -246,6 +259,7 @@ export default function WorkspacePage() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
+          id: activeDesignId,
           name: designTitle,
           roomData: roomColors,
           masterDesignId: templateId
@@ -253,6 +267,11 @@ export default function WorkspacePage() {
       });
 
       if (response.ok) {
+        const body = await response.json();
+        if (body.visualization?.id) {
+          setActiveDesignId(body.visualization.id);
+        }
+
         setSuccessState(true);
         setTimeout(() => {
           setConfirmOpen(false);
@@ -304,7 +323,10 @@ export default function WorkspacePage() {
           </button>
           <button
             type="button"
-            onClick={() => setConfirmOpen(true)}
+            onClick={() => {
+              setSuccessState(false);
+              setConfirmOpen(true);
+            }}
             className={`px-4 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all ${isPremiumTemplate ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "bg-emerald-500 text-black font-black"
               }`}
           >
@@ -353,7 +375,6 @@ export default function WorkspacePage() {
                   onClick={() => {
                     setActiveColor(colorItem.hex);
                     if (activeSurface) {
-                      // ✅ FIXED: Replaced compile error parameter reference to use state handler array
                       setRoomColors((prev) => ({ ...prev, [activeSurface]: colorItem.hex }));
                     }
                   }}

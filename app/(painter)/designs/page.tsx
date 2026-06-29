@@ -55,10 +55,10 @@ export default function Painter3DStudioDashboardHub() {
 
       try {
         const fallbackCatalog: MasterTemplate[] = [
-          { id: "tmpl_living_lux", title: "Luxury Minimalist Living Room", category: "INTERIOR", model_url: "/models/living_lux.glb", plan_type: "FREE", price: "0.00", thumbnail_icon: "🛋️" },
-          { id: "tmpl_bed_nordic", title: "Nordic Executive Bedroom Layout", category: "INTERIOR", model_url: "/models/bed_nordic.glb", plan_type: "RENTAL", price: "2500.00", thumbnail_icon: "🛏️" },
-          { id: "tmpl_office_corp", title: "Corporate Creative Studio Office", category: "COMMERCIAL", model_url: "/models/office_corp.glb", plan_type: "BUY", price: "6000.00", thumbnail_icon: "🏢" },
-          { id: "tmpl_accent_geometric", title: "Geometric POP Screeding Accent Wall", category: "ACCENT", model_url: "/models/accent_geometric.glb", plan_type: "FREE", price: "0.00", thumbnail_icon: "📐" }
+          { id: "tmpl_living_lux", title: "Luxury Minimalist Living Room", category: "INTERIOR", model_url: "", plan_type: "FREE", price: "0.00", thumbnail_icon: "🛋️" },
+          { id: "tmpl_bed_nordic", title: "Nordic Executive Bedroom Layout", category: "INTERIOR", model_url: "", plan_type: "RENTAL", price: "2500.00", thumbnail_icon: "🛏️" },
+          { id: "tmpl_office_corp", title: "Corporate Creative Studio Office", category: "COMMERCIAL", model_url: "", plan_type: "BUY", price: "6000.00", thumbnail_icon: "🏢" },
+          { id: "tmpl_accent_geometric", title: "Geometric POP Screeding Accent Wall", category: "ACCENT", model_url: "", plan_type: "FREE", price: "0.00", thumbnail_icon: "📐" }
         ];
 
         const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog`, {
