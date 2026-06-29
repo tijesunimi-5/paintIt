@@ -1,18 +1,24 @@
 // app/(public)/view/[id]/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useParams } from "next/navigation";
+import { Canvas, ThreeEvent } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
 
-interface PublicProfileData {
-  id: string;
+interface SharedDataPayload {
+  share_id: string;
+  design_name: string;
+  room_data: Record<string, string>;
+  parent_template_name: string;
+  painter_id: string;
   full_name: string;
-  role: string;
   bio: string | null;
   location: string | null;
   experience_years: number;
   skills: string[];
   avatar_url: string | null;
+  phone_number: string | null;
 }
 
 interface PortfolioProject {
@@ -25,17 +31,61 @@ interface PortfolioProject {
   created_at: string;
 }
 
-export default function PublicProfilePage() {
-  const params = useParams();
+function ReadOnlyRoomPlanes({ roomColors }: { roomColors: Record<string, string> }) {
+  const width = 14;
+  const height = 8;
+  const depth = 14;
 
-  // ✅ FIX 1: Defensively fall back between id and sharedId to guarantee path matching
+  return (
+    <group>
+      <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[width, depth]} />
+        <meshStandardMaterial color={roomColors.floor || "#161618"} roughness={0.7} metalness={0.1} />
+      </mesh>
+      <mesh position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[width, depth]} />
+        <meshStandardMaterial color={roomColors.ceiling || "#1a1a1c"} roughness={0.9} />
+      </mesh>
+      <mesh position={[0, height / 2, -depth / 2]} rotation={[0, 0, 0]}>
+        <planeGeometry args={[width, height]} />
+        <meshStandardMaterial color={roomColors.wallBack || "#F2EFE9"} roughness={0.85} />
+      </mesh>
+      <group position={[-width / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <mesh>
+          <planeGeometry args={[depth, height]} />
+          <meshStandardMaterial color={roomColors.wallLeft || "#9BA498"} roughness={0.85} />
+        </mesh>
+        <mesh position={[0, -0.5, 0.02]}>
+          <boxGeometry args={[4, 4, 0.1]} />
+          <meshStandardMaterial color="#1a1a1a" metalness={0.7} roughness={0.3} />
+        </mesh>
+      </group>
+      <group position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
+        <mesh>
+          <planeGeometry args={[depth, height]} />
+          <meshStandardMaterial color={roomColors.wallRight || "#C4B199"} roughness={0.85} />
+        </mesh>
+        <mesh position={[2, -1.2, 0.02]}>
+          <boxGeometry args={[2.5, 5.6, 0.05]} />
+          <meshStandardMaterial color="#222222" roughness={0.6} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+export default function PublicProfileAndConceptPage() {
+  const params = useParams();
   const targetId = (params?.id || params?.sharedId) as string;
 
-  const [profile, setProfile] = useState<PublicProfileData | null>(null);
+  const [is3DConceptShare, setIs3DConceptShare] = useState<boolean>(false);
+  const [sharedConcept, setSharedConcept] = useState<SharedDataPayload | null>(null);
+
+  const [profile, setProfile] = useState<SharedDataPayload | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioProject[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 🖼️ Live Expansion Gallery Lightbox States
+  // Expansion Gallery Lightbox States
   const [activeLightboxProject, setActiveLightboxProject] = useState<PortfolioProject | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
@@ -44,8 +94,20 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (!targetId) return;
 
-    const aggregateStudioData = async () => {
+    const resolvePublicDataStream = async () => {
       try {
+        // Attempt to parse parameter target id against public shared 3D mockup tables first
+        const conceptRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`);
+
+        if (conceptRes.ok) {
+          const conceptBody = await conceptRes.json();
+          setSharedConcept(conceptBody.data);
+          setIs3DConceptShare(true);
+          setLoading(false);
+          return;
+        }
+
+        // If it's a traditional user account ID, resolve profile metrics and image portfolio lists
         const [profileRes, portfolioRes] = await Promise.all([
           fetch(`${BACKEND_API_URL}/api/profile/${targetId}`),
           fetch(`${BACKEND_API_URL}/api/portfolio/projects?userId=${targetId}`)
@@ -61,13 +123,13 @@ export default function PublicProfilePage() {
           setPortfolio(portfolioData.projects || []);
         }
       } catch (err) {
-        console.error("Aggregation error on public profiles stream:", err);
+        console.error("Aggregation error on public stream:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    aggregateStudioData();
+    resolvePublicDataStream();
   }, [targetId, BACKEND_API_URL]);
 
   const handleOpenLightbox = (project: PortfolioProject) => {
@@ -88,7 +150,69 @@ export default function PublicProfilePage() {
     );
   }
 
-  if (!profile) {
+  // 📺 RENDER INTERACTIVE 3D SCHEME VIEW FOR SHARING LINKS
+  if (is3DConceptShare && sharedConcept) {
+    const whatsappLinkText = encodeURIComponent(
+      `Hello ${sharedConcept.full_name}, I just reviewed the 3D room color setup titled "${sharedConcept.design_name}" you shared with me. I love it! Let's lock down the contract details.`
+    );
+
+    return (
+      <div className="fixed inset-0 bg-neutral-950 flex flex-col overflow-hidden select-none z-40 text-white">
+
+        {/* TOP FLOATING DESCRIPTION HEADER CARD */}
+        <div className="w-full bg-neutral-950 border-b border-neutral-900 px-4 py-3 z-20 flex items-center justify-between">
+          <div>
+            <h1 className="text-xs font-black uppercase tracking-wider text-neutral-100">{sharedConcept.design_name}</h1>
+            <p className="text-[9px] text-neutral-500 uppercase tracking-widest mt-0.5">
+              Designed by: <span className="text-emerald-400 font-bold">{sharedConcept.full_name}</span>
+            </p>
+          </div>
+          <span className="text-[9px] bg-neutral-900 border border-neutral-850 px-2.5 py-1 rounded-md text-neutral-400 font-bold uppercase select-none">
+            Client Interactive Preview
+          </span>
+        </div>
+
+        {/* FULLSCREEN RENDER CANVAS */}
+        <div className="flex-1 w-full h-full relative z-10">
+          <Canvas camera={{ position: [12, 12, 12], fov: 45 }}>
+            <color attach="background" args={["#0a0a0a"]} />
+            <ambientLight intensity={0.7} />
+            <directionalLight position={[5, 15, 5]} intensity={0.8} />
+            <Suspense fallback={null}>
+              <ReadOnlyRoomPlanes roomColors={sharedConcept.room_data} />
+            </Suspense>
+            <OrbitControls maxDistance={22} minDistance={4} enablePan={false} />
+          </Canvas>
+        </div>
+
+        {/* BOTTOM DIRECT ACTION RESPONSE PANEL */}
+        <div className="absolute bottom-4 left-0 right-0 z-20 px-4 flex justify-center pointer-events-none">
+          <div className="w-full max-w-md bg-neutral-900/90 border border-neutral-800 p-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pointer-events-auto backdrop-blur-md">
+            <div>
+              <h4 className="text-xs font-black uppercase text-neutral-200">Approve This Look?</h4>
+              <p className="text-[10px] text-neutral-500 mt-0.5 leading-relaxed">Tap to message the painter back directly on WhatsApp.</p>
+            </div>
+            {sharedConcept.phone_number ? (
+              <a
+                href={`https://wa.me/${sharedConcept.phone_number.replace(/\s+/g, "")}?text=${whatsappLinkText}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full sm:w-auto px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black text-center text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md"
+              >
+                💬 Approve Concept Design
+              </a>
+            ) : (
+              <span className="text-[9px] text-neutral-600 italic">No phone contact details linked</span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 📱 STANDARD PORTFOLIO CATALOG BACKUP FALLBACK VIEW
+  const activeProfile = profile || sharedConcept;
+  if (!activeProfile) {
     return (
       <div className="text-center py-24 border border-dashed border-neutral-900 rounded-3xl max-w-md mx-auto">
         <span className="text-xl">⚠️</span>
@@ -101,35 +225,33 @@ export default function PublicProfilePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-10 animate-fade-in text-white pb-12 selection:bg-emerald-500 selection:text-black">
 
-      {/* 💳 IDENTITY PROFILE HERO HEADER */}
+      {/* IDENTITY PROFILE HERO HEADER */}
       <div className="p-6 bg-neutral-950 border border-neutral-900 rounded-3xl space-y-4 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-
-            {/* ✅ FIX 2: Safely switches between real Cloudinary images and text fallback initials instantly */}
             <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-2xl text-emerald-400 select-none shadow-inner overflow-hidden shrink-0">
-              {profile.avatar_url ? (
+              {activeProfile.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={profile.avatar_url}
-                  alt={profile.full_name}
+                  src={activeProfile.avatar_url}
+                  alt={activeProfile.full_name}
                   className="w-full h-full object-cover animate-fade-in"
                 />
               ) : (
-                <span>{profile.full_name.charAt(0).toUpperCase()}</span>
+                <span>{activeProfile.full_name.charAt(0).toUpperCase()}</span>
               )}
             </div>
 
             <div>
-              <h1 className="text-xl font-black uppercase tracking-wide text-neutral-100">{profile.full_name}</h1>
+              <h1 className="text-xl font-black uppercase tracking-wide text-neutral-100">{activeProfile.full_name}</h1>
               <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-neutral-500">
-                <span>📍 {profile.location || "Location unconfigured"}</span>
-                {profile.experience_years > 0 && (
+                <span>📍 {activeProfile.location || "Location unconfigured"}</span>
+                {activeProfile.experience_years > 0 && (
                   <>
                     <span className="text-neutral-700">•</span>
-                    <span className="text-neutral-400 font-semibold">💼 {profile.experience_years} Years Professional Experience</span>
+                    <span className="text-neutral-400 font-semibold">💼 {activeProfile.experience_years} Years Active Experience</span>
                   </>
                 )}
               </div>
@@ -140,20 +262,20 @@ export default function PublicProfilePage() {
           </span>
         </div>
 
-        {profile.bio && (
+        {activeProfile.bio && (
           <div className="pt-4 border-t border-neutral-900/60">
             <h3 className="text-[10px] font-black uppercase tracking-wider text-neutral-600 mb-1">Studio Biography</h3>
-            <p className="text-xs text-neutral-400 leading-relaxed font-medium">{profile.bio}</p>
+            <p className="text-xs text-neutral-400 leading-relaxed font-medium">{activeProfile.bio}</p>
           </div>
         )}
       </div>
 
-      {/* 🏷️ SPECIALTIES & APPLICATION BADGES */}
-      {profile.skills && profile.skills.length > 0 && (
+      {/* SPECIALTIES & APPLICATION BADGES */}
+      {activeProfile.skills && activeProfile.skills.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-xs font-black uppercase tracking-wider text-neutral-500 pl-1">Finishes Specializations</h3>
           <div className="flex flex-wrap gap-2">
-            {profile.skills.map((skill, idx) => (
+            {activeProfile.skills.map((skill, idx) => (
               <span
                 key={idx}
                 className="px-3 py-1.5 bg-neutral-950 border border-neutral-900 text-neutral-300 font-bold text-[11px] rounded-xl cursor-default hover:border-emerald-500/20 transition-colors shadow-md"
@@ -165,7 +287,7 @@ export default function PublicProfilePage() {
         </div>
       )}
 
-      {/* 🖼️ HIGH-RESOLUTION PORTFOLIO GALLERY LAYER */}
+      {/* HIGH-RESOLUTION PORTFOLIO GALLERY LAYER */}
       <div className="space-y-4">
         <h3 className="text-xs font-black uppercase tracking-wider text-neutral-500 pl-1">Real Finishes Showcase</h3>
 
@@ -173,7 +295,7 @@ export default function PublicProfilePage() {
           <div className="p-10 bg-neutral-950 border border-neutral-900 rounded-3xl text-center space-y-2 border-dashed flex flex-col items-center justify-center min-h-[160px]">
             <span className="text-xl opacity-40">📸</span>
             <h4 className="text-[11px] font-black uppercase tracking-wide text-neutral-400">No Showcase Projects Available</h4>
-            <p className="text-[10px] text-neutral-600 max-w-xs leading-relaxed">This contractor has not uploaded live finishes work imagery onto their gallery dashboard yet o!</p>
+            <p className="text-[10px] text-neutral-600 max-w-xs leading-relaxed">This contractor has not uploaded live finishes work imagery onto their gallery dashboard yet.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -188,11 +310,7 @@ export default function PublicProfilePage() {
                     className="relative w-full h-48 bg-neutral-900 border-b border-neutral-900 overflow-hidden cursor-pointer"
                   >
                     {project.images && project.images.length > 0 ? (
-                      <img
-                        src={project.images[0]}
-                        alt={project.title}
-                        className="w-full h-full object-cover group-hover:scale-[101%] transition-transform duration-300"
-                      />
+                      <img src={project.images[0]} alt={project.title} className="w-full h-full object-cover group-hover:scale-[101%] transition-transform duration-300" />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-neutral-700 bg-neutral-950">
                         <span className="text-xl mb-1">🖼️</span>
@@ -222,22 +340,6 @@ export default function PublicProfilePage() {
                         </p>
                       )}
                     </div>
-
-                    {project.colors_used && project.colors_used.length > 0 && (
-                      <div className="space-y-1.5 pt-2 border-t border-neutral-900/60">
-                        <span className="text-[9px] uppercase font-black tracking-widest text-neutral-600 block">Swatches Applied</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {project.colors_used.map((color, index) => (
-                            <span
-                              key={index}
-                              className="px-2 py-0.5 bg-neutral-900 border border-neutral-800 rounded-md text-[10px] text-neutral-400 font-semibold uppercase tracking-wider"
-                            >
-                              {color}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -254,10 +356,9 @@ export default function PublicProfilePage() {
         )}
       </div>
 
-      {/* 🖼️ LIGHTBOX MODAL */}
+      {/* LIGHTBOX MODAL */}
       {activeLightboxProject && (
         <div className="fixed inset-0 bg-black/95 z-50 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-fade-in">
-
           <button
             onClick={() => setActiveLightboxProject(null)}
             className="absolute top-6 right-6 text-xs text-neutral-500 hover:text-white font-black uppercase tracking-widest border border-neutral-900 px-3 py-1.5 rounded-xl bg-neutral-950"
@@ -266,15 +367,9 @@ export default function PublicProfilePage() {
           </button>
 
           <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-
             <div className="md:col-span-2 space-y-4">
               <div className="w-full h-[55vh] bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden relative flex items-center justify-center shadow-2xl select-none">
-                <img
-                  src={activeLightboxProject.images[currentImageIndex]}
-                  alt=""
-                  className="max-w-full max-h-full object-contain"
-                />
-
+                <img src={activeLightboxProject.images[currentImageIndex]} alt="" className="max-w-full max-h-full object-contain" />
                 {activeLightboxProject.images.length > 1 && (
                   <>
                     <button
@@ -292,21 +387,6 @@ export default function PublicProfilePage() {
                   </>
                 )}
               </div>
-
-              {activeLightboxProject.images.length > 1 && (
-                <div className="flex flex-wrap gap-2 items-center justify-center">
-                  {activeLightboxProject.images.map((img, index) => (
-                    <div
-                      key={index}
-                      onClick={() => setCurrentImageIndex(index)}
-                      className={`w-12 h-12 bg-neutral-900 rounded-lg overflow-hidden border-2 cursor-pointer transition-all ${currentImageIndex === index ? "border-emerald-500 scale-105" : "border-neutral-900 opacity-50"
-                        }`}
-                    >
-                      <img src={img} alt="" className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="space-y-4 text-left">
@@ -318,19 +398,7 @@ export default function PublicProfilePage() {
               <p className="text-xs text-neutral-400 leading-relaxed max-h-[25vh] overflow-y-auto pr-1">
                 {activeLightboxProject.description || "No project overview notes compiled."}
               </p>
-
-              {activeLightboxProject.colors_used && activeLightboxProject.colors_used.length > 0 && (
-                <div className="space-y-1.5 border-t border-neutral-900 pt-3">
-                  <span className="text-[9px] uppercase font-black text-neutral-600 block">Swatches Registered</span>
-                  <div className="flex flex-wrap gap-1">
-                    {activeLightboxProject.colors_used.map((c, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-neutral-900 border border-neutral-850 rounded text-[10px] text-neutral-400 uppercase font-semibold">{c}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-
           </div>
         </div>
       )}

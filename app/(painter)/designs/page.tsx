@@ -33,14 +33,17 @@ export default function Painter3DStudioDashboardHub() {
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
 
-  // Modal State Parameters
+  // Modal Configuration States Tracker
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [modalSuccess, setModalSuccess] = useState<boolean>(false);
   const [selectedTemplate, setSelectedTemplate] = useState<MasterTemplate | null>(null);
 
+  // Deletion Tracking Parameters
+  const [deleteOpen, setDeleteOpen] = useState<boolean>(false);
+  const [designTargetForDelete, setDesignTargetForDelete] = useState<SavedVisualization | null>(null);
+
   const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-  // Unified pipeline to fetch catalog templates and saved variants safely
   useEffect(() => {
     let isMounted = true;
 
@@ -58,7 +61,6 @@ export default function Painter3DStudioDashboardHub() {
           { id: "tmpl_accent_geometric", title: "Geometric POP Screeding Accent Wall", category: "ACCENT", model_url: "/models/accent_geometric.glb", plan_type: "FREE", price: "0.00", thumbnail_icon: "📐" }
         ];
 
-        // 1. Fetch Master Templates Catalog 
         const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog`, {
           method: "GET",
           headers: { "Content-Type": "application/json" }
@@ -73,7 +75,6 @@ export default function Painter3DStudioDashboardHub() {
           }
         }
 
-        // 2. Fetch Active Personalized Saved Concept Layouts
         const savedRes = await fetch(`${BACKEND_API_URL}/api/visualizations`, {
           method: "GET",
           headers: {
@@ -96,9 +97,7 @@ export default function Painter3DStudioDashboardHub() {
 
     loadDashboardStudioData();
 
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [accessToken, BACKEND_API_URL]);
 
   useEffect(() => {
@@ -119,17 +118,17 @@ export default function Painter3DStudioDashboardHub() {
       if (res.ok) {
         const data = await res.json();
         const whatsappText = encodeURIComponent(
-          `Hello! Check out the custom 3D wall color scheme layout I designed for your property on PaintIt Studio: ${window.location.origin}/workspace?shareId=${data.shareId}`
+          `Hello! Check out the custom 3D wall color scheme layout I designed for your property on PaintIt Studio: ${window.location.origin}/view/${data.shareId}`
         );
         window.open(`https://wa.me/?text=${whatsappText}`, "_blank");
-        showToast({ message: "WhatsApp link generated.", severity: "success" });
+        showToast({ message: "WhatsApp link generated successfully.", severity: "success" });
       } else {
-        throw new Error("Sharing configuration error.");
+        throw new Error("Sharing endpoint failure.");
       }
     } catch (err) {
       console.error("Link generation failure:", err);
       navigator.clipboard.writeText(`${window.location.origin}/workspace?id=${design.id}`);
-      showToast({ message: "Workspace view link copied directly.", severity: "info" });
+      showToast({ message: "Workspace workspace url link copied directly.", severity: "info" });
     }
   };
 
@@ -141,14 +140,38 @@ export default function Painter3DStudioDashboardHub() {
 
   const executeTemplateLoad = () => {
     if (!selectedTemplate) return;
-
     setModalSuccess(true);
-
-    // Lock UI state interaction temporarily to present success message before routing
     setTimeout(() => {
       setModalOpen(false);
       setRedirectUrl(`/workspace?template=${selectedTemplate.id}`);
     }, 1500);
+  };
+
+  const initializeDeleteWorkflow = (e: React.MouseEvent, design: SavedVisualization) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDesignTargetForDelete(design);
+    setDeleteOpen(true);
+  };
+
+  const commitDeletionToDatabase = async () => {
+    if (!designTargetForDelete) return;
+
+    try {
+      const res = await fetch(`${BACKEND_API_URL}/api/visualizations/${designTargetForDelete.id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${accessToken}` }
+      });
+
+      if (res.ok) {
+        setSavedDesigns((prev) => prev.filter(item => item.id !== designTargetForDelete.id));
+        showToast({ message: "Project mockup cleanly deleted from dashboard.", severity: "success" });
+      } else {
+        showToast({ message: "Failed removing entry from cloud indices.", severity: "error" });
+      }
+    } catch (err) {
+      console.error("Delete exception caught:", err);
+    }
   };
 
   const filteredCatalog = catalog.filter(item => activeTab === "ALL" || item.category === activeTab);
@@ -204,11 +227,20 @@ export default function Painter3DStudioDashboardHub() {
             {savedDesigns.map((design) => (
               <div
                 key={design.id}
-                className="group p-5 bg-neutral-950 border border-neutral-900 hover:border-neutral-800 rounded-2xl flex flex-col justify-between shadow-xl transition-all duration-150"
+                className="group p-5 bg-neutral-950 border border-neutral-900 hover:border-neutral-800 rounded-2xl flex flex-col justify-between shadow-xl transition-all duration-150 relative"
               >
-                <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={(e) => initializeDeleteWorkflow(e, design)}
+                  className="absolute top-4 right-4 text-neutral-600 hover:text-red-400 text-[10px] font-bold uppercase transition-colors"
+                  title="Delete this layout concept variant safely"
+                >
+                  ✕ Delete
+                </button>
+
+                <div className="space-y-3 pr-12">
                   <div>
-                    <h4 className="text-sm font-black text-neutral-100 uppercase tracking-wide group-hover:text-emerald-400 transition-colors">
+                    <h4 className="text-sm font-black text-neutral-100 uppercase tracking-wide group-hover:text-emerald-400 transition-colors truncate">
                       {design.name}
                     </h4>
                     <p className="text-[10px] text-neutral-500 mt-0.5 font-medium">
@@ -231,7 +263,7 @@ export default function Painter3DStudioDashboardHub() {
                   <button
                     type="button"
                     onClick={() => shareToWhatsAppStream(design)}
-                    className="px-3.5 py-2 bg-emerald-950/20 border border-emerald-900/40 hover:border-emerald-500/40 text-emerald-400 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center"
+                    className="px-3.5 py-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 border border-emerald-500/20 hover:text-black text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center"
                   >
                     💬 Share
                   </button>
@@ -345,6 +377,20 @@ export default function Painter3DStudioDashboardHub() {
         confirmText="Launch Engine"
         cancelText="Go Back"
         isSuccessState={modalSuccess}
+      />
+
+      {/* SAfE DELETION DECK CONFIRMATION INTERFACE POPUP */}
+      <ConfirmModal
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => {
+          commitDeletionToDatabase();
+          setDeleteOpen(false);
+        }}
+        title="Delete Design Layout?"
+        message={`Are you sure you want to permanently remove "${designTargetForDelete?.name}" from your saved studio layouts folder? This action cannot be reversed.`}
+        confirmText="Yes, Delete Design"
+        cancelText="Cancel"
       />
 
     </div>
