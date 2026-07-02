@@ -1,9 +1,9 @@
-// app/(painter)/dashboard/profile/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/context/AuthContext"; // ✅ Added to call unified logout hook
-import { InfoTooltip } from "@/components/ui/InfoToolTip";
+import { useAuth } from "@/context/AuthContext"; // ✅ Destructured authentication context utilities[cite: 2]
+import { useRouter } from "next/navigation";
+import { InfoTooltip } from "@/components/ui/InfoToolTip"; // ✅ Included explicit context components[cite: 2]
 
 interface UserProfile {
   id: string;
@@ -20,7 +20,8 @@ interface UserProfile {
 }
 
 export default function AccountProfileWorkspacePage() {
-  const { logout, user: authUser } = useAuth(); // ✅ Destructured authentication context utilities
+  const { logout } = useAuth(); // ✅ Destructured authentication context utilities[cite: 2]
+  const router = useRouter();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [fullName, setFullName] = useState("");
@@ -30,7 +31,7 @@ export default function AccountProfileWorkspacePage() {
   const [experienceYears, setExperienceYears] = useState<number>(0);
   const [skillsInput, setSkillsInput] = useState("");
 
-  // 🖼️ Avatar Management Upload States
+  // 🖼️ Avatar Management Upload States[cite: 2]
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
@@ -38,10 +39,10 @@ export default function AccountProfileWorkspacePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [feedbackBanner, setFeedbackBanner] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"; // ✅ Configured environment variables mapping context[cite: 2]
 
   // ==========================================================
-  // 🔄 HYDRATE PROFILE DATA VIA SQL JOIN ENDPOINT
+  // 🔄 HYDRATE PROFILE DATA VIA SQL JOIN ENDPOINT[cite: 2]
   // ==========================================================
   useEffect(() => {
     const fetchActiveProfileSettings = async () => {
@@ -49,7 +50,7 @@ export default function AccountProfileWorkspacePage() {
         const response = await fetch(`${BACKEND_URL}/api/profile/me`, {
           method: "GET",
           headers: {
-            "Authorization": `Bearer ${localStorage.getItem("paintit_access_token")}`,
+            "Authorization": `Bearer ${localStorage.getItem("paintit_access_token")}`, // ✅ Handles authorization payload mappings securely[cite: 2]
           },
         });
 
@@ -62,11 +63,11 @@ export default function AccountProfileWorkspacePage() {
           setFullName(p.full_name || "");
           setBio(p.bio || "");
           setPhoneNumber(p.phone_number || "");
-          setLocation(p.location || "Ibadan, Nigeria");
+          setLocation(p.location || "Ibadan, Nigeria"); // ✅ Defaults to operating base[cite: 2]
           setExperienceYears(p.experience_years || 0);
           setSkillsInput(p.skills?.join(", ") || "");
 
-          // Hydrate avatar url from global context mapping fallback if missing on standard profile model
+          // Hydrate avatar url from global context mapping fallback if missing on standard profile model[cite: 2]
           setAvatarUrl(data.profile.avatar_url || localStorage.getItem("paintit_avatar_cache") || null);
         }
       } catch (err: unknown) {
@@ -81,13 +82,13 @@ export default function AccountProfileWorkspacePage() {
   }, [BACKEND_URL]);
 
   // ==========================================================
-  // ☁️ CLOUDINARY MEDIA STREAM BINARY UPLOADER
+  // ☁️ CLOUDINARY MEDIA STREAM BINARY UPLOADER[cite: 2]
   // ==========================================================
   const handleAvatarFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Structure validation defenses prior to chunk stream serialization
+    // Structure validation defenses prior to chunk stream serialization[cite: 2]
     if (file.size > 3 * 1024 * 1024) {
       setFeedbackBanner({ type: "error", msg: "Image size threshold exceeded. Keep images below 3MB." });
       return;
@@ -98,10 +99,10 @@ export default function AccountProfileWorkspacePage() {
 
     const mediaPayload = new FormData();
     mediaPayload.append("file", file);
-    mediaPayload.append("upload_preset", "paintIt-portfolio"); // Ensure unsigned uploads are active on Cloudinary settings dashboard
+    mediaPayload.append("upload_preset", "paintIt-portfolio"); // ✅ Binds active upload profiles configuration[cite: 2]
 
     try {
-      // 1. Direct Cloudinary Node ingestion endpoint fetch request
+      // 1. Direct Cloudinary Node ingestion endpoint fetch request[cite: 2]
       const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`, {
         method: "POST",
         body: mediaPayload,
@@ -111,7 +112,7 @@ export default function AccountProfileWorkspacePage() {
       const uploadResult = await cloudinaryRes.json();
       const safeSecureUrl = uploadResult.secure_url;
 
-      // 2. Synchronize Cloudinary url string references directly back into Express profile schema
+      // 2. Synchronize Cloudinary url string references directly back into Express profile schema[cite: 2]
       const backendSyncRes = await fetch(`${BACKEND_URL}/api/profile/avatar`, {
         method: "POST",
         headers: {
@@ -125,7 +126,7 @@ export default function AccountProfileWorkspacePage() {
 
       setAvatarUrl(safeSecureUrl);
       localStorage.setItem("paintit_avatar_cache", safeSecureUrl);
-      setFeedbackBanner({ type: "success", msg: "Studio branding asset updated successfully o!" });
+      setFeedbackBanner({ type: "success", msg: "Studio branding asset updated successfully o!" }); // ✅ Native notification banner updates[cite: 2]
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Media stream interface error.";
       setFeedbackBanner({ type: "error", msg });
@@ -135,7 +136,7 @@ export default function AccountProfileWorkspacePage() {
   };
 
   // ==========================================================
-  // 💾 SAVE MUTATED RE-CONFIGURATIONS (UPSERT EXECUTOR)
+  // 💾 SAVE MUTATED RE-CONFIGURATIONS (UPSERT EXECUTOR)[cite: 2]
   // ==========================================================
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,7 +173,7 @@ export default function AccountProfileWorkspacePage() {
         throw new Error(data.error || "Failed to update profile matrix.");
       }
 
-      setFeedbackBanner({ type: "success", msg: "Profile credentials synchronized successfully o!" });
+      setFeedbackBanner({ type: "success", msg: "Profile credentials synchronized successfully o!" }); // ✅ Displays confirmation status[cite: 2]
 
       if (data.profile) {
         setProfile((prev) => prev ? { ...prev, ...data.profile } : null);
@@ -197,23 +198,34 @@ export default function AccountProfileWorkspacePage() {
   return (
     <div className="w-full text-white space-y-6 max-w-2xl mx-auto md:mx-0 pb-20">
 
-      {/* Page Title Context Node Header */}
+      {/* Page Title Context Node Header[cite: 2] */}
       <div className="flex items-center justify-between border-b border-neutral-900 pb-5">
         <div>
           <h1 className="text-xl font-black tracking-tight text-neutral-100">Account Master Settings</h1>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Configure public biography descriptions, experience fields, and core communication channels.
+            Configure public biography descriptions, experience fields, and core communication channels.[cite: 2]
           </p>
         </div>
 
-        {/* ✅ MOBILE VIEW LOGOUT COMPONENT BUTTON: Displays strictly below sm (768px break limits) */}
-        <button
-          type="button"
-          onClick={logout}
-          className="block sm:hidden px-3.5 py-2 bg-red-950/20 active:bg-red-950/40 border border-red-900/30 text-red-400 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md shrink-0"
-        >
-          Logout 👋
-        </button>
+        {/* ✅ DUAL-LAYER SECURITY PORTAL BUTTON: Visible and easy to locate on both mobile and desktop viewports */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => router.push("/settings")}
+            className="px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/20 text-emerald-400 hover:text-black font-black text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md"
+          >
+            ⚙️ Security Settings
+          </button>
+
+          {/* ✅ MOBILE VIEW LOGOUT COMPONENT BUTTON: Displays strictly below sm break limits[cite: 2] */}
+          <button
+            type="button"
+            onClick={logout} // ✅ Invokes unified account log out execution handles[cite: 2]
+            className="block sm:hidden px-3.5 py-2 bg-red-950/20 active:bg-red-950/40 border border-red-900/30 text-red-400 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md"
+          >
+            Logout 👋
+          </button>
+        </div>
       </div>
 
       {feedbackBanner && (
@@ -225,7 +237,7 @@ export default function AccountProfileWorkspacePage() {
         </div>
       )}
 
-      {/* ✅ HIGH-FIDELITY AVATAR MANAGEMENT COMPONENT BLOCK CARD */}
+      {/* ✅ HIGH-FIDELITY AVATAR MANAGEMENT COMPONENT BLOCK CARD[cite: 2] */}
       <div className="p-6 bg-neutral-950 border border-neutral-900 rounded-2xl flex flex-col sm:flex-row items-center gap-5 shadow-2xl relative overflow-hidden">
         <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-xl text-emerald-400 tracking-widest relative overflow-hidden shrink-0 group select-none shadow-inner">
           {avatarUrl ? (
@@ -244,7 +256,7 @@ export default function AccountProfileWorkspacePage() {
         <div className="space-y-2 text-center sm:text-left w-full sm:w-auto">
           <div>
             <h3 className="text-xs font-black uppercase tracking-wider text-neutral-200">Studio Branding Imagery</h3>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Upload a clean high-resolution face portrait photo or company logo vector.</p>
+            <p className="text-[11px] text-neutral-500 mt-0.5">Upload a clean high-resolution face portrait photo or company logo vector.[cite: 2]</p>
           </div>
           <label className="inline-block cursor-pointer px-4 py-2 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-300 hover:text-emerald-400 text-[10px] font-black uppercase tracking-wider rounded-xl transition-colors select-none">
             {isUploadingAvatar ? "Processing File Stream..." : "Choose Photo Image"}
@@ -261,7 +273,7 @@ export default function AccountProfileWorkspacePage() {
 
       <form onSubmit={handleProfileSave} className="space-y-5 bg-neutral-950 border border-neutral-900 rounded-2xl p-6 shadow-2xl">
 
-        {/* Read-Only Grid Rows */}
+        {/* Read-Only Grid Rows[cite: 2] */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="sm:col-span-2">
             <label className="text-[9px] uppercase font-black tracking-widest text-neutral-600 block mb-1.5">Email Route Anchor</label>
@@ -277,7 +289,7 @@ export default function AccountProfileWorkspacePage() {
           </div>
         </div>
 
-        {/* Account Identity Inputs */}
+        {/* Account Identity Inputs[cite: 2] */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-[10px] uppercase font-black tracking-wider text-neutral-400 block mb-1.5">Full Identity Name</label>
@@ -324,15 +336,15 @@ export default function AccountProfileWorkspacePage() {
           </div>
         </div>
 
-        {/* Conditional Specialties Section built explicitly for Painter roles */}
+        {/* Conditional Specialties Section built explicitly for Painter roles[cite: 2] */}
         {profile?.role === "painter" && (
           <div className="space-y-1.5 animate-fade-in">
             <label className="text-[10px] uppercase font-black tracking-wider text-neutral-400 flex items-center gap-1">
               Active Finish Specializations (Comma Separated)
               <InfoTooltip
                 title="Specialist Swatches"
-                what="A list of specific finishes or texturing styles you offer."
-                why="Clients look for these skills to verify you can execute advanced remodeling work."
+                what="A list of specific finishes or texturing styles you offer.[cite: 2]"
+                why="Clients look for these skills to verify you can execute advanced remodeling work.[cite: 2]"
               />
             </label>
             <input
