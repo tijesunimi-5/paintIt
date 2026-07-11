@@ -1,11 +1,11 @@
 // app/(auth)/verify-otp/page.tsx
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAlert } from "@/context/AlertContext";
 
-export default function VerifyOtpPage() {
+function VerifyOTPForm() {
   const [otp, setOtp] = useState<string[]>(new Array(6).fill(""));
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [resending, setResending] = useState<boolean>(false);
@@ -29,7 +29,6 @@ export default function VerifyOtpPage() {
       return () => clearTimeout(timer);
     }
   }, [countdown]);
-
 
   const triggerAutoSubmit = async (completeCode: string) => {
     const verificationEmail = sessionStorage.getItem("paintit_verification_email");
@@ -61,7 +60,6 @@ export default function VerifyOtpPage() {
       showToast({ message: "Code verified successfully!", severity: "success" });
 
       if (isRecoveryFlow) {
-        // ✅ FIX: Pass the context safely through search parameters to ensure it's available instantly on load
         sessionStorage.removeItem("paintit_verification_email");
         router.push(`/reset-password?email=${encodeURIComponent(verificationEmail)}&token=${completeCode}`);
       } else {
@@ -146,7 +144,6 @@ export default function VerifyOtpPage() {
 
     setResending(true);
     try {
-      // ✅ FIXED: Routes to forgot password path if resending during account recovery
       const endpoint = isRecoveryFlow ? "/api/auth/forgot-password" : "/api/auth/resend-otp";
 
       const response = await fetch(`${BACKEND_API_URL}${endpoint}`, {
@@ -227,6 +224,16 @@ export default function VerifyOtpPage() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+export default function VerifyOtpPage() {
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center p-4 text-white">
+      <Suspense fallback={<div className="text-neutral-500 text-xs uppercase font-mono tracking-widest animate-pulse">Loading secure session keys...</div>}>
+        <VerifyOTPForm />
+      </Suspense>
     </div>
   );
 }
