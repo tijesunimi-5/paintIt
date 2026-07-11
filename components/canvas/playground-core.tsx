@@ -17,10 +17,8 @@ interface GizmoProps {
 // 🕹️ MASTER 3D TRANSFORM GIZMO (POSITION, ROTATION, SCALE)
 // ==========================================================
 export function AdminTransformGizmo({ activeLight, mode, onTransformUpdate }: GizmoProps) {
-  // FIXED: Use the correct TransformControls ref type to satisfy Drei's component ref contract
   const transformRef = useRef<TransformControlsImpl>(null);
 
-  // FIXED: Removed unknown type assert hacks to handle data bindings cleanly via native type checking
   const handleObjectChange = (e: THREE.Event | undefined) => {
     if (!e || !e.target) return;
 
@@ -61,7 +59,6 @@ export function AdminTransformGizmo({ activeLight, mode, onTransformUpdate }: Gi
     >
       <mesh>
         <sphereGeometry args={[0.05, 16, 16]} />
-        {/* ADDED: Connected activeLight.color directly to the wireframe inspector handle to visually track tint variations */}
         <meshBasicMaterial color={activeLight.color || (activeLight.type === 'point' ? '#06b6d4' : '#d946ef')} wireframe />
       </mesh>
     </TransformControls>
@@ -105,15 +102,6 @@ export function PlaygroundLighting({ isNight, showHelpers }: BaseLightingProps) 
         <>
           <ambientLight intensity={0.35} color="#ffffff" />
           <hemisphereLight args={['#ffffff', '#444444', 0.25]} />
-          {/* <directionalLight
-            ref={sunRef}
-            castShadow
-            position={[4, 6, 0]} //4, 5, 3
-            intensity={1.5}
-            color="#fffdf2"
-            shadow-mapSize={[2048, 2048]}
-            shadow-bias={-0.0002}
-          /> */}
         </>
       )}
     </>
@@ -181,38 +169,82 @@ export function StudioBlenderModelMesh({ modelUrl, surfaceStates, onTargetSelect
 }
 
 // ==========================================================
-// 🎥 CAMERA CONTROLLER (STRICT BOUNDS MONITOR)
+// 🎥 CAMERA CONTROLLER (STRICT BOUNDS & MOBILE-TOUCH OPTIMIZED)
 // ==========================================================
 interface CameraControllerProps {
   isOrbitDisabled: boolean;
   minPolar: number;
   maxPolar: number;
   maxZoom: number;
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
 }
 
-export function CameraStudioController({ isOrbitDisabled, minPolar, maxPolar, maxZoom }: CameraControllerProps) {
-  const controlsRef = useRef<OrbitControlsImpl>(null);
+export function CameraStudioController({ isOrbitDisabled, minPolar, maxPolar, maxZoom, controlsRef }: CameraControllerProps) {
   useEffect(() => {
-    if (controlsRef.current) {
-      controlsRef.current.target.set(0, 1.3, 0);
-      controlsRef.current.update();
+    const controls = controlsRef.current;
+    if (controls) {
+      // 1. FIXED STARTING POSITION: Places the camera lens high up in the middle space of the house
+      controls.object.position.set(0, 1.7, 1.5);
+
+      // 2. FIXED TARGET FOXY POINT: Forces rotation to anchor in the center air space, keeping the floor out of clipping bounds
+      controls.target.set(0, 1.5, 0);
+      controls.update();
     }
-  }, []);
+  }, [controlsRef]);
+
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    const handleCameraChange = () => {
+      const target = controls.target;
+
+      // Panning envelope boundaries to lock camera within the house walls
+      const maxPanX = 2.2;
+      const minPanY = 0.8;  // Raised minimum height constraint so panning can't drag down beneath foundations
+      const maxPanY = 2.4;
+      const maxPanZ = 2.2;
+
+      let needsUpdate = false;
+
+      if (target.x < -maxPanX) { target.x = -maxPanX; needsUpdate = true; }
+      if (target.x > maxPanX) { target.x = maxPanX; needsUpdate = true; }
+
+      if (target.y < minPanY) { target.y = minPanY; needsUpdate = true; }
+      if (target.y > maxPanY) { target.y = maxPanY; needsUpdate = true; }
+
+      if (target.z < -maxPanZ) { target.z = -maxPanZ; needsUpdate = true; }
+      if (target.z > maxPanZ) { target.z = maxPanZ; needsUpdate = true; }
+
+      if (needsUpdate) {
+        controls.update();
+      }
+    };
+
+    controls.addEventListener('change', handleCameraChange);
+    return () => controls.removeEventListener('change', handleCameraChange);
+  }, [controlsRef]);
 
   return (
     <OrbitControls
-      ref={controlsRef}
+      ref={controlsRef as React.RefObject<OrbitControlsImpl>}
       enabled={!isOrbitDisabled}
-      enablePan={false}
+      enablePan={true}
       enableZoom={true}
       enableDamping
       dampingFactor={0.08}
-      minDistance={0.01}
-      maxDistance={maxZoom}
+      minDistance={0.1}
+      maxDistance={maxZoom * 5}
       minAzimuthAngle={-Infinity}
       maxAzimuthAngle={Infinity}
-      minPolarAngle={minPolar}
-      maxPolarAngle={maxPolar}
+      minPolarAngle={0.2}
+      // 3. MAX POLAR CLAMP: Strictly stops the camera from swinging too low, completely blocking views beneath the floor!
+      maxPolarAngle={Math.PI / 2.1}
+      // 4. FIXED TOUCH CONTROL PROFILE: Swiping with 2 fingers now slides the camera itself horizontally (X) and vertically (Y)
+      touches={{
+        ONE: THREE.TOUCH.ROTATE, // 1 finger = Orbit 360 view / up-down tilt lookaround
+        TWO: THREE.TOUCH.PAN     // 2 fingers = Pure screen horizontal and vertical translation (X and Y Panning)
+      }}
     />
   );
 }
