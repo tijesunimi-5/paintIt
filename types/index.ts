@@ -44,7 +44,12 @@ export interface ConfirmationConfig {
   onCancel?: () => void;
 }
 
-export type UserRole = 'PAINTER' | 'DESIGNER' | 'CONSUMER' | 'ARCHITECT' | 'ADMIN';
+export type UserRole =
+  | "PAINTER"
+  | "DESIGNER"
+  | "CONSUMER"
+  | "ARCHITECT"
+  | "ADMIN";
 
 export interface UserSessionData {
   id: string;
@@ -87,7 +92,7 @@ export interface OnboardingStep {
 
 export interface ToastConfig {
   message: string;
-  severity: 'success' | 'error' | 'info';
+  severity: "success" | "error" | "info";
   duration?: number;
 }
 
@@ -98,4 +103,15 @@ export interface ConfirmationConfig {
   cancelLabel?: string;
   onConfirm: () => void;
   onCancel?: () => void;
+}
+
+export interface DynamicLightInstance {
+  id: string;
+  type: "point" | "spot";
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+  intensity: number;
+  color: string;
+  distance: number;
 }

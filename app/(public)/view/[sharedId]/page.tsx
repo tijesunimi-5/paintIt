@@ -2,12 +2,16 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useParams } from "next/navigation";
-import { Canvas, ThreeEvent } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { useParams, useRouter } from "next/navigation";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, useGLTF } from "@react-three/drei";
+import * as THREE from "three";
+import { useAuth } from "@/context/AuthContext";
+import { useAlert } from "@/context/AlertContext";
 
 interface SharedDataPayload {
   share_id: string;
+  design_id?: string; // Track original design ID for workspace canvas routing
   design_name: string;
   room_data: Record<string, string>;
   parent_template_name: string;
@@ -19,6 +23,8 @@ interface SharedDataPayload {
   skills: string[];
   avatar_url: string | null;
   phone_number: string | null;
+  model_url?: string | null;
+  master_design_id?: string;
 }
 
 interface PortfolioProject {
@@ -28,6 +34,14 @@ interface PortfolioProject {
   images: string[];
   location: string;
   colors_used: string[];
+  created_at: string;
+}
+
+interface Painter3DConcept {
+  id: string;
+  name: string;
+  parent_template_name: string;
+  room_data: Record<string, string>;
   created_at: string;
 }
 
@@ -55,27 +69,40 @@ function ReadOnlyRoomPlanes({ roomColors }: { roomColors: Record<string, string>
           <planeGeometry args={[depth, height]} />
           <meshStandardMaterial color={roomColors.wallLeft || "#9BA498"} roughness={0.85} />
         </mesh>
-        <mesh position={[0, -0.5, 0.02]}>
-          <boxGeometry args={[4, 4, 0.1]} />
-          <meshStandardMaterial color="#1a1a1a" metalness={0.7} roughness={0.3} />
-        </mesh>
       </group>
       <group position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
         <mesh>
           <planeGeometry args={[depth, height]} />
           <meshStandardMaterial color={roomColors.wallRight || "#C4B199"} roughness={0.85} />
         </mesh>
-        <mesh position={[2, -1.2, 0.02]}>
-          <boxGeometry args={[2.5, 5.6, 0.05]} />
-          <meshStandardMaterial color="#222222" roughness={0.6} />
-        </mesh>
       </group>
     </group>
   );
 }
 
+function PublicCustomBlenderModelMesh({ modelUrl, surfaceStates }: { modelUrl: string; surfaceStates: Record<string, string> }) {
+  const { scene } = useGLTF(modelUrl);
+
+  useEffect(() => {
+    scene.traverse((node: THREE.Object3D) => {
+      if (node instanceof THREE.Mesh && node.material instanceof THREE.MeshStandardMaterial) {
+        const meshName = node.name || node.uuid;
+        if (surfaceStates[meshName]) {
+          node.material.color.set(surfaceStates[meshName]);
+        }
+      }
+    });
+  }, [scene, surfaceStates]);
+
+  return <primitive object={scene} />;
+}
+
 export default function PublicProfileAndConceptPage() {
   const params = useParams();
+  const router = useRouter();
+  const { accessToken, user } = useAuth();
+  const { showToast } = useAlert();
+
   const targetId = (params?.id || params?.sharedId) as string;
 
   const [is3DConceptShare, setIs3DConceptShare] = useState<boolean>(false);
@@ -83,7 +110,10 @@ export default function PublicProfileAndConceptPage() {
 
   const [profile, setProfile] = useState<SharedDataPayload | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioProject[]>([]);
+  // ✅ NEW: State array storing the painter's interactive 3D concept list
+  const [concepts3D, setConcepts3D] = useState<Painter3DConcept[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [importing, setImporting] = useState<boolean>(false);
 
   // Expansion Gallery Lightbox States
   const [activeLightboxProject, setActiveLightboxProject] = useState<PortfolioProject | null>(null);
@@ -96,7 +126,6 @@ export default function PublicProfileAndConceptPage() {
 
     const resolvePublicDataStream = async () => {
       try {
-        // Attempt to parse parameter target id against public shared 3D mockup tables first
         const conceptRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`);
 
         if (conceptRes.ok) {
@@ -107,10 +136,11 @@ export default function PublicProfileAndConceptPage() {
           return;
         }
 
-        // If it's a traditional user account ID, resolve profile metrics and image portfolio lists
-        const [profileRes, portfolioRes] = await Promise.all([
+        // Fetch profile, project images portfolio, and interactive 3D concepts for the specific painter ID[cite: 4]
+        const [profileRes, portfolioRes, conceptsRes] = await Promise.all([
           fetch(`${BACKEND_API_URL}/api/profile/${targetId}`),
-          fetch(`${BACKEND_API_URL}/api/portfolio/projects?userId=${targetId}`)
+          fetch(`${BACKEND_API_URL}/api/portfolio/projects?userId=${targetId}`),
+          fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`) // Backend route helper mapping
         ]);
 
         if (profileRes.ok) {
@@ -122,6 +152,11 @@ export default function PublicProfileAndConceptPage() {
           const portfolioData = await portfolioRes.json();
           setPortfolio(portfolioData.projects || []);
         }
+
+        if (conceptsRes.ok) {
+          const conceptsData = await conceptsRes.json();
+          setConcepts3D(conceptsData.visualizations || []);
+        }
       } catch (err) {
         console.error("Aggregation error on public stream:", err);
       } finally {
@@ -131,6 +166,52 @@ export default function PublicProfileAndConceptPage() {
 
     resolvePublicDataStream();
   }, [targetId, BACKEND_API_URL]);
+
+  const handleSaveToClientHub = async () => {
+    if (!accessToken || !user) {
+      showToast({ message: "Please create an account or log in to clone this design scheme.", severity: "error" });
+      router.push("/login");
+      return;
+    }
+
+    if ((user as { role?: string })?.role !== "client") {
+      showToast({ message: "Only client accounts can import designs into their Design Hub.", severity: "error" });
+      return;
+    }
+
+    if (!sharedConcept) return;
+
+    setImporting(true);
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/api/visualizations`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          name: `${sharedConcept.design_name} (Remixed)`,
+          roomData: sharedConcept.room_data,
+          masterDesignId: sharedConcept.master_design_id || "tmpl_living_lux"
+        })
+      });
+
+      if (response.ok) {
+        showToast({ message: "Design cloned perfectly! Redirecting to your Hub layout...", severity: "success" });
+        setTimeout(() => {
+          router.push("/hub");
+        }, 1500);
+      } else {
+        const errData = await response.json();
+        throw new Error(errData.message || "Failed to clone setup.");
+      }
+    } catch (err) {
+      console.error("Cloning pipeline exception caught:", err);
+      showToast({ message: "Could not import design asset parameters.", severity: "error" });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleOpenLightbox = (project: PortfolioProject) => {
     if (project.images && project.images.length > 0) {
@@ -150,7 +231,7 @@ export default function PublicProfileAndConceptPage() {
     );
   }
 
-  // 📺 RENDER INTERACTIVE 3D SCHEME VIEW FOR SHARING LINKS
+  // 📺 1. RENDER INTERACTIVE FULLSCREEN 3D SCHEME VIEW FOR SINGLE SHARE LINKS[cite: 4]
   if (is3DConceptShare && sharedConcept) {
     const whatsappLinkText = encodeURIComponent(
       `Hello ${sharedConcept.full_name}, I just reviewed the 3D room color setup titled "${sharedConcept.design_name}" you shared with me. I love it! Let's lock down the contract details.`
@@ -158,8 +239,6 @@ export default function PublicProfileAndConceptPage() {
 
     return (
       <div className="fixed inset-0 bg-neutral-950 flex flex-col overflow-hidden select-none z-40 text-white">
-
-        {/* TOP FLOATING DESCRIPTION HEADER CARD */}
         <div className="w-full bg-neutral-950 border-b border-neutral-900 px-4 py-3 z-20 flex items-center justify-between">
           <div>
             <h1 className="text-xs font-black uppercase tracking-wider text-neutral-100">{sharedConcept.design_name}</h1>
@@ -172,45 +251,62 @@ export default function PublicProfileAndConceptPage() {
           </span>
         </div>
 
-        {/* FULLSCREEN RENDER CANVAS */}
         <div className="flex-1 w-full h-full relative z-10">
           <Canvas camera={{ position: [12, 12, 12], fov: 45 }}>
             <color attach="background" args={["#0a0a0a"]} />
             <ambientLight intensity={0.7} />
             <directionalLight position={[5, 15, 5]} intensity={0.8} />
             <Suspense fallback={null}>
-              <ReadOnlyRoomPlanes roomColors={sharedConcept.room_data} />
+              {sharedConcept.model_url && sharedConcept.model_url.trim() !== "" ? (
+                <PublicCustomBlenderModelMesh
+                  modelUrl={sharedConcept.model_url}
+                  surfaceStates={sharedConcept.room_data}
+                />
+              ) : (
+                <ReadOnlyRoomPlanes roomColors={sharedConcept.room_data} />
+              )}
             </Suspense>
             <OrbitControls maxDistance={22} minDistance={4} enablePan={false} />
           </Canvas>
         </div>
 
-        {/* BOTTOM DIRECT ACTION RESPONSE PANEL */}
         <div className="absolute bottom-4 left-0 right-0 z-20 px-4 flex justify-center pointer-events-none">
-          <div className="w-full max-w-md bg-neutral-900/90 border border-neutral-800 p-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pointer-events-auto backdrop-blur-md">
+          <div className="w-full max-w-xl bg-neutral-900/90 border border-neutral-800 p-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pointer-events-auto backdrop-blur-md">
             <div>
               <h4 className="text-xs font-black uppercase text-neutral-200">Approve This Look?</h4>
-              <p className="text-[10px] text-neutral-500 mt-0.5 leading-relaxed">Tap to message the painter back directly on WhatsApp.</p>
+              <p className="text-[10px] text-neutral-500 mt-0.5 leading-relaxed">Save it to your Design Hub to start custom remix variants, or chat directly.</p>
             </div>
-            {sharedConcept.phone_number ? (
-              <a
-                href={`https://wa.me/${sharedConcept.phone_number.replace(/\s+/g, "")}?text=${whatsappLinkText}`}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full sm:w-auto px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black text-center text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md"
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                disabled={importing}
+                onClick={handleSaveToClientHub}
+                className="px-4 py-2.5 bg-neutral-950 border border-neutral-800 text-neutral-200 hover:text-emerald-400 text-center text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
               >
-                💬 Approve Concept Design
-              </a>
-            ) : (
-              <span className="text-[9px] text-neutral-600 italic">No phone contact details linked</span>
-            )}
+                {importing ? "Importing Design..." : "📥 Save to My Hub"}
+              </button>
+
+              {sharedConcept.phone_number ? (
+                <a
+                  href={`https://wa.me/${sharedConcept.phone_number.replace(/\s+/g, "")}?text=${whatsappLinkText}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black text-center text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md block"
+                >
+                  💬 Chat with Painter
+                </a>
+              ) : (
+                <span className="text-[9px] text-neutral-600 italic flex items-center justify-center">No phone contact details linked</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // 📱 STANDARD PORTFOLIO CATALOG BACKUP FALLBACK VIEW
+  // 📱 2. STANDARD PORTFOLIO CATALOG BACKUP FALLBACK VIEW[cite: 4]
   const activeProfile = profile || sharedConcept;
   if (!activeProfile) {
     return (
@@ -225,7 +321,7 @@ export default function PublicProfileAndConceptPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-10 animate-fade-in text-white pb-12 selection:bg-emerald-500 selection:text-black">
 
-      {/* IDENTITY PROFILE HERO HEADER */}
+      {/* IDENTITY PROFILE HERO HEADER[cite: 4] */}
       <div className="p-6 bg-neutral-950 border border-neutral-900 rounded-3xl space-y-4 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
 
@@ -233,7 +329,6 @@ export default function PublicProfileAndConceptPage() {
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-2xl text-emerald-400 select-none shadow-inner overflow-hidden shrink-0">
               {activeProfile.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={activeProfile.avatar_url}
                   alt={activeProfile.full_name}
@@ -270,7 +365,49 @@ export default function PublicProfileAndConceptPage() {
         )}
       </div>
 
-      {/* SPECIALTIES & APPLICATION BADGES */}
+      {/* ✅ NEW: INTERACTIVE 3D CONCEPTS SHOWCASE DECK GRID */}
+      <div className="space-y-4">
+        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-500 pl-1">Interactive 3D Color Presets</h3>
+
+        {concepts3D.length === 0 ? (
+          <div className="p-10 bg-neutral-950 border border-neutral-900 rounded-3xl text-center border-dashed flex flex-col items-center justify-center min-h-[140px] space-y-2">
+            <span className="text-xl opacity-40">🎨</span>
+            <h4 className="text-[11px] font-black uppercase tracking-wide text-neutral-400">No Interactive 3D Concepts</h4>
+            <p className="text-[10px] text-neutral-600 max-w-xs leading-relaxed">This painter hasn&apos;t published any custom 3D design models to load yet.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {concepts3D.map((concept) => (
+              <div
+                key={concept.id}
+                onClick={() => router.push(`/designs?templateId=${concept.id}&preview=true`)}
+                className="group bg-neutral-950 border border-neutral-900 hover:border-emerald-500/30 rounded-2xl p-5 flex flex-col justify-between cursor-pointer transition-all shadow-xl"
+              >
+                <div className="space-y-2">
+                  <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-850 flex items-center justify-center font-black text-emerald-400 text-lg shadow-inner group-hover:bg-emerald-500 group-hover:text-black transition-colors">
+                    📦
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-neutral-200 tracking-wide group-hover:text-emerald-400 transition-colors truncate">
+                      {concept.name}
+                    </h4>
+                    <p className="text-[10px] text-neutral-500 font-medium uppercase tracking-wider mt-0.5">
+                      Layout: {concept.parent_template_name || "Custom Room"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-neutral-900/40 flex items-center justify-between text-[9px] font-black text-neutral-500 group-hover:text-emerald-400 transition-colors uppercase tracking-wider">
+                  <span>Launch 3D Visualizer</span>
+                  <span>Interactive &rarr;</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* SPECIALTIES & APPLICATION BADGES[cite: 4] */}
       {activeProfile.skills && activeProfile.skills.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-xs font-black uppercase tracking-wider text-neutral-500 pl-1">Finishes Specializations</h3>
@@ -287,7 +424,7 @@ export default function PublicProfileAndConceptPage() {
         </div>
       )}
 
-      {/* HIGH-RESOLUTION PORTFOLIO GALLERY LAYER */}
+      {/* HIGH-RESOLUTION PORTFOLIO GALLERY LAYER[cite: 4] */}
       <div className="space-y-4">
         <h3 className="text-xs font-black uppercase tracking-wider text-neutral-500 pl-1">Real Finishes Showcase</h3>
 
@@ -356,7 +493,7 @@ export default function PublicProfileAndConceptPage() {
         )}
       </div>
 
-      {/* LIGHTBOX MODAL */}
+      {/* LIGHTBOX MODAL[cite: 4] */}
       {activeLightboxProject && (
         <div className="fixed inset-0 bg-black/95 z-50 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-fade-in">
           <button
