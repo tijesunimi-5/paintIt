@@ -37,7 +37,7 @@ export default function DedicatedPlayground() {
   const [dismissedHint, setDismissedHint] = useState<boolean>(false);
 
   const [cameraConfig, setCameraConfig] = useControls('Camera Limits', () => ({
-    maxZoomDistance: { value: 0.55, min: 0.1, max: 2.5, step: 0.05, label: 'Max Out Zoom' },
+    maxZoomDistance: { value: 0.55, min: 0.1, max: 15.0, step: 0.05, label: 'Max Out Zoom' },
     ceilingLimitAngle: { value: 2.3, min: 1.0, max: 3.14, step: 0.05, label: 'Ceiling Stop' },
     floorLimitAngle: { value: 1.65, min: 1.0, max: 3.14, step: 0.05, label: 'Floor Stop' },
   }));
