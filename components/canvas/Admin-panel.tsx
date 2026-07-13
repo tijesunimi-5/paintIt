@@ -34,7 +34,6 @@ export function FloatingAdminPanel({
   currentColor, onColorChange, onCameraPan, onCameraZoomChange, currentZoomValue,
   isLocked, onToggleLock, onSaveToDatabase, cleanViewActive, onToggleCleanView
 }: AdminPanelProps) {
-  // Set default starting position safe for both states
   const [position, setPosition] = useState({ x: 16, y: 80 });
   const [size, setSize] = useState({ width: 340, height: 490 });
   const [isDragging, setIsDragging] = useState(false);
@@ -72,7 +71,6 @@ export function FloatingAdminPanel({
 
   return (
     <div
-      // ✅ FIXED: Inline layout sizes are stripped instantly when cleanViewActive is true!
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
@@ -90,49 +88,34 @@ export function FloatingAdminPanel({
           : 'rounded-2xl overflow-hidden max-w-[calc(100vw-32px)] max-h-[calc(100vh-100px)] md:max-h-[calc(100vh-40px)] landscape:w-72 landscape:h-[calc(100vh-40px)]'
         }`}
     >
-      {/* 👁️ HIDDEN FLOATING BUTTON STATE */}
       {cleanViewActive ? (
         <button
           type="button"
           onMouseDown={handleMouseDown}
           onTouchStart={handleTouchStart}
           onClick={(e) => {
-            // Prevent reopening from firing immediately if they were just dragging the bubble around
             if (isDragging) return;
             onToggleCleanView();
           }}
           className="w-full h-full flex items-center justify-center text-xl bg-gradient-to-b from-cyan-500 to-cyan-600 shadow-inner text-neutral-950 rounded-full active:scale-90 transition-transform cursor-pointer font-black"
-          title="Open Editor HUD Panel"
         >
           🎨
         </button>
       ) : (
         <>
-          {/* FULL HUD LAYOUT WINDOW */}
-          <div
-            onMouseDown={handleMouseDown}
-            onTouchStart={handleTouchStart}
-            className="drag-handle bg-neutral-950/80 px-4 py-3 border-b border-neutral-800/60 cursor-move flex items-center justify-between shrink-0"
-          >
+          <div onMouseDown={handleMouseDown} onTouchStart={handleTouchStart} className="drag-handle bg-neutral-950/80 px-4 py-3 border-b border-neutral-800/60 cursor-move flex items-center justify-between shrink-0">
             <div className="flex flex-col">
               <span className="text-[11px] font-black tracking-wider text-white uppercase">Workspace HUD</span>
               <span className="text-[9px] text-neutral-400 font-medium tracking-wide">Target: <span className="text-cyan-400 font-bold font-mono">{activeSurface}</span></span>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onToggleCleanView}
-                className="bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg p-1 px-2 text-[10px] font-black text-neutral-300 uppercase flex items-center gap-1 transition-all"
-              >
-                🕶️ Hide
-              </button>
+              <button type="button" onClick={onToggleCleanView} className="bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg p-1 px-2 text-[10px] font-black text-neutral-300 uppercase flex items-center gap-1 transition-all">🕶️ Hide</button>
               <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase ${isLocked ? 'bg-red-950 text-red-400 border border-red-900/30' : 'bg-emerald-950 text-emerald-400 border border-emerald-900/30'}`}>
                 {isLocked ? '🔒' : '🔓'}
               </span>
             </div>
           </div>
 
-          {/* SCROLLABLE FORM PANELS */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
             <div className="bg-neutral-950 p-2.5 rounded-xl border border-neutral-800/80 grid grid-cols-2 gap-2">
               <button
@@ -145,11 +128,10 @@ export function FloatingAdminPanel({
               <button type="button" onClick={onSaveToDatabase} className="bg-neutral-900 hover:bg-neutral-800 text-cyan-400 border border-neutral-800 text-[10px] font-black uppercase tracking-wider py-2 rounded-xl transition-all">💾 Sync Live DB</button>
             </div>
 
-            {/* ACCORDION: SURFACE PAINTER */}
-            <div className="bg-neutral-950 rounded-xl border border-neutral-800/80 overflow-hidden transition-all">
-              <button type="button" onClick={() => setIsPainterOpen(!isPainterOpen)} className="w-full flex justify-between items-center bg-neutral-950/90 px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider border-b border-neutral-900">
-                <span>🎨 Surface Painter Tool</span>
-                <span className="text-neutral-500 text-xs font-mono">{isPainterOpen ? '−' : '+'}</span>
+            {/* ✅ FIXED: SECTION PAINTER CARD COMPLETELY COLLAPSES ITS CONTENT & BORDERS */}
+            <div className={`transition-all rounded-xl border border-neutral-800/80 overflow-hidden ${isPainterOpen ? 'bg-neutral-950' : 'bg-transparent border-none'}`}>
+              <button type="button" onClick={() => setIsPainterOpen(!isPainterOpen)} className={`w-full flex justify-between items-center px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider ${isPainterOpen ? 'bg-neutral-950/90 border-b border-neutral-900/40' : 'bg-neutral-950 rounded-xl border border-neutral-800/60'}`}>
+                <span className="flex items-center gap-1.5">📂 {isPainterOpen ? '▼' : '▶'} Surface Painter Tool</span>
               </button>
               {isPainterOpen && (
                 <div className="p-3 space-y-3 bg-neutral-950/30">
@@ -171,29 +153,20 @@ export function FloatingAdminPanel({
               )}
             </div>
 
-            {/* ACCORDION: CAMERA HUD */}
-            <div className="bg-neutral-950 rounded-xl border border-neutral-800/80 overflow-hidden transition-all">
-              <button type="button" onClick={() => setIsCameraOpen(!isCameraOpen)} className="w-full flex justify-between items-center bg-neutral-950/90 px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider border-b border-neutral-900">
-                <span>📱 Camera Navigation HUD</span>
-                <span className="text-neutral-500 text-xs font-mono">{isCameraOpen ? '−' : '+'}</span>
+            {/* ✅ FIXED: CAMERA NAVIGATION ACCORDION COMPLETELY COLLAPSES */}
+            <div className={`transition-all rounded-xl border border-neutral-800/80 overflow-hidden ${isCameraOpen ? 'bg-neutral-950' : 'bg-transparent border-none'}`}>
+              <button type="button" onClick={() => setIsCameraOpen(!isCameraOpen)} className={`w-full flex justify-between items-center px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider ${isCameraOpen ? 'bg-neutral-950/90 border-b border-neutral-900/40' : 'bg-neutral-950 rounded-xl border border-neutral-800/60'}`}>
+                <span className="flex items-center gap-1.5">📂 {isCameraOpen ? '▼' : '▶'} Camera Navigation HUD</span>
               </button>
               {isCameraOpen && (
                 <div className="p-3 space-y-3 bg-neutral-950/30">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[9px] font-semibold text-neutral-400 uppercase font-mono">
-                        <span>Lens Zoom Distance</span>
-                        <span className="text-cyan-400">{currentZoomValue.toFixed(2)}m</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.1"
-                        max="15.0" // 🔥 Updated to 15.0 to give your thumb full scrolling range
-                        step="0.05"
-                        value={currentZoomValue}
-                        onChange={(e) => onCameraZoomChange(parseFloat(e.target.value))}
-                        className="w-full accent-cyan-500 bg-neutral-900 h-1.5 rounded-lg appearance-none cursor-pointer"
-                      />
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[9px] font-semibold text-neutral-400 uppercase font-mono">
+                      <span>Lens Zoom Distance</span>
+                      <span className="text-cyan-400">{currentZoomValue.toFixed(2)}m</span>
                     </div>
+                    <input type="range" min="0.1" max="15.0" step="0.05" value={currentZoomValue} onChange={(e) => onCameraZoomChange(parseFloat(e.target.value))} className="w-full accent-cyan-500 bg-neutral-900 h-1.5 rounded-lg appearance-none cursor-pointer" />
+                  </div>
                   <div className="space-y-1.5 pt-1 border-t border-neutral-900 flex flex-col items-center">
                     <button type="button" onClick={() => onCameraPan('up')} className="w-10 h-8 bg-neutral-900 border border-neutral-800 rounded-lg text-white font-bold text-xs flex items-center justify-center active:scale-90 transition-all">▲</button>
                     <div className="flex justify-center items-center gap-4 w-full">
@@ -207,11 +180,10 @@ export function FloatingAdminPanel({
               )}
             </div>
 
-            {/* ACCORDION: 3D ENGINE BUILDER */}
-            <div className="bg-neutral-950 rounded-xl border border-neutral-800/80 overflow-hidden transition-all">
-              <button type="button" onClick={() => setIsEngineOpen(!isEngineOpen)} className="w-full flex justify-between items-center bg-neutral-950/90 px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider border-b border-neutral-900">
-                <span>💡 3D Studio Light Setup</span>
-                <span className="text-neutral-500 text-xs font-mono">{isEngineOpen ? '−' : '+'}</span>
+            {/* ✅ FIXED: 3D LIGHT STUDIO ENGINE COMPLETELY COLLAPSES */}
+            <div className={`transition-all rounded-xl border border-neutral-800/80 overflow-hidden ${isEngineOpen ? 'bg-neutral-950' : 'bg-transparent border-none'}`}>
+              <button type="button" onClick={() => setIsEngineOpen(!isEngineOpen)} className={`w-full flex justify-between items-center px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider ${isEngineOpen ? 'bg-neutral-950/90 border-b border-neutral-900/40' : 'bg-neutral-950 rounded-xl border border-neutral-800/60'}`}>
+                <span className="flex items-center gap-1.5">📂 {isEngineOpen ? '▼' : '▶'} 3D Studio Light Setup</span>
               </button>
               {isEngineOpen && (
                 <div className="p-3 space-y-4 bg-neutral-950/30">
@@ -259,7 +231,20 @@ export function FloatingAdminPanel({
                       </div>
                       <div className="space-y-1">
                         <div className="flex justify-between text-[10px] font-bold text-neutral-400 uppercase"><span>Beam Spread / Size</span><span className="text-amber-400 font-mono">{activeLight.scale[0].toFixed(2)}x</span></div>
-                        <input type="range" min="0.2" max="5.0" step="0.1" value={activeLight.scale[0]} onChange={(e) => onVectorUpdate('scale', 0, parseFloat(e.target.value))} className="w-full accent-amber-500 bg-neutral-950 h-1.5 rounded-lg appearance-none cursor-pointer" />
+                        <input
+                          type="range"
+                          min="0.2"
+                          max="5.0"
+                          step="0.1"
+                          value={activeLight.scale[0]}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            onVectorUpdate('scale', 0, val);
+                            onVectorUpdate('scale', 1, val);
+                            onVectorUpdate('scale', 2, val);
+                          }}
+                          className="w-full accent-amber-500 bg-neutral-950 h-1.5 rounded-lg appearance-none cursor-pointer"
+                        />
                       </div>
 
                       <div className="border-t border-neutral-800/60 pt-3 space-y-3">
@@ -271,7 +256,7 @@ export function FloatingAdminPanel({
                             ? { min: -4.0, max: MAX_CEILING_HEIGHT, step: 0.02, customLimits: [null, [0.05, MAX_CEILING_HEIGHT - 0.05], null], labels: ['X (Left/Right)', 'Y (Height)', 'Z (Front/Back)'] }
                             : vectorKey === 'rotation'
                               ? { min: -Math.PI, max: Math.PI, step: 0.02, labels: ['Pitch (X)', 'Yaw (Y)', 'Roll (Z)'] }
-                              : { min: 0.2, max: 3.0, step: 0.05, labels: ['Width (X)', 'Length (Y)', 'Depth (Z)'] };
+                              : { min: 0.2, max: 5.0, step: 0.05, labels: ['Width (X)', 'Length (Y)', 'Depth (Z)'] };
 
                           return (
                             <div className="space-y-2.5">
@@ -300,9 +285,9 @@ export function FloatingAdminPanel({
                 </div>
               )}
             </div>
+
           </div>
 
-          {/* FOOTER BAR */}
           <div className="bg-neutral-950/40 p-2 border-t border-neutral-800/60 flex items-center justify-between shrink-0 landscape:hidden">
             <span className="text-[8px] text-neutral-600 font-mono tracking-widest uppercase">HUD_SECURE_V1.55</span>
             <div className="hidden md:flex flex-col gap-1 w-24">

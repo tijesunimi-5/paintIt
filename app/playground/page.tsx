@@ -38,8 +38,9 @@ export default function DedicatedPlayground() {
 
   const [cameraConfig, setCameraConfig] = useControls('Camera Limits', () => ({
     maxZoomDistance: { value: 0.55, min: 0.1, max: 15.0, step: 0.05, label: 'Max Out Zoom' },
-    ceilingLimitAngle: { value: 2.3, min: 1.0, max: 3.14, step: 0.05, label: 'Ceiling Stop' },
-    floorLimitAngle: { value: 1.65, min: 1.0, max: 3.14, step: 0.05, label: 'Floor Stop' },
+    // ✅ Sliders scaled directly on true radian boundaries (0 = straight up, 3.14 = straight down)
+    ceilingLimitAngle: { value: 0.0, min: 0.0, max: 3.14, step: 0.05, label: 'Ceiling Stop' },
+    floorLimitAngle: { value: 1.85, min: 0.0, max: 3.14, step: 0.05, label: 'Floor Stop' },
   }));
 
   const globalEnvironment = useControls('Global Scene', {
@@ -53,7 +54,6 @@ export default function DedicatedPlayground() {
       const savedLights = localStorage.getItem('paintit_scene_lights');
       const savedCamConfig = localStorage.getItem('paintit_camera_bounds');
 
-      // ✅ FIXED: Safely tucked away inside the macro task queue to kill the synchronous render cascade completely
       queueMicrotask(() => {
         setIsPortrait(window.innerHeight > window.innerWidth);
         if (savedLock) setIsLocked(JSON.parse(savedLock));
@@ -156,7 +156,8 @@ export default function DedicatedPlayground() {
       </div>
 
       <div className="absolute inset-0 w-full h-full z-10 bg-neutral-900">
-        <Canvas shadows camera={{ position: [0, 1.4, 0.4], fov: isPortrait ? 88 : 68 }}>
+        {/* ✅ FIXED APERTURE: Restores square, straight-edged room perspective shapes without wide fish-eye distortion cascades */}
+        <Canvas shadows camera={{ position: [0, 1.4, 2.2], fov: isPortrait ? 55 : 45 }}>
           <PlaygroundLighting isNight={globalEnvironment.isNightMode} showHelpers={!cleanViewActive && !isLocked} />
 
           <Suspense fallback={null}>
@@ -179,8 +180,11 @@ export default function DedicatedPlayground() {
             controlsRef={controlsRef}
             isOrbitDisabled={false}
             maxZoom={cameraConfig.maxZoomDistance}
-            minPolar={Math.PI / cameraConfig.ceilingLimitAngle}
-            maxPolar={Math.PI / cameraConfig.floorLimitAngle}
+
+            // ✅ FIXED: Raw rads cleanly handed over directly to control elements
+            minPolar={cameraConfig.ceilingLimitAngle}
+            maxPolar={cameraConfig.floorLimitAngle}
+
             isLocked={isLocked}
           />
         </Canvas>

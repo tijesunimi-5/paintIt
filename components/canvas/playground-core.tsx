@@ -135,16 +135,9 @@ export function PlaygroundLightsEngine({ lights }: LightRendererProps) {
         if (light.type === 'point') {
           return (
             <mesh key={light.id} position={light.position}>
-              <pointLight
-                intensity={light.intensity}
-                color={light.color}
-                distance={light.distance}
-                decay={1.0}
-                castShadow
-                shadow-bias={-0.0005}
-              />
+              <pointLight intensity={light.intensity} color={light.color} distance={light.distance} decay={1.0} castShadow shadow-bias={-0.0005} />
               <sphereGeometry args={[0.04 * light.scale[0], 16, 16]} />
-              <meshBasicMaterial color={light.color} wireframe opacity={0.15} transparent />
+              <meshBasicMaterial color={light.color} wireframe opacity={0.25} transparent />
             </mesh>
           );
         }
@@ -156,7 +149,7 @@ export function PlaygroundLightsEngine({ lights }: LightRendererProps) {
 
 function SpotLightInstance({ light }: { light: DynamicLightInstance }) {
   const lightRef = useRef<THREE.SpotLight>(null);
-  const targetRef = useRef<THREE.Group>(null); // ✅ FIXED: Changed to native Group to prevent unmounting!
+  const targetRef = useRef<THREE.Group>(null);
 
   useEffect(() => {
     if (lightRef.current && targetRef.current) {
@@ -165,34 +158,20 @@ function SpotLightInstance({ light }: { light: DynamicLightInstance }) {
   }, []);
 
   const targetPosition = useMemo(() => {
-    const dir = new THREE.Vector3(0, -1, 0); // Base target points straight down at the floor
+    const dir = new THREE.Vector3(0, -1, 0);
     const euler = new THREE.Euler(light.rotation[0], light.rotation[1], light.rotation[2], 'XYZ');
     dir.applyEuler(euler);
-    dir.multiplyScalar(5); // ✅ FIXED: Project the target 5 meters away so the angle vector tracks accurately!
-
-    return [
-      light.position[0] + dir.x,
-      light.position[1] + dir.y,
-      light.position[2] + dir.z
-    ] as [number, number, number];
+    dir.multiplyScalar(5);
+    return [light.position[0] + dir.x, light.position[1] + dir.y, light.position[2] + dir.z] as [number, number, number];
   }, [light.position, light.rotation]);
+
+  const dynamicConeAngle = useMemo(() => {
+    return Math.min((Math.PI / 6) * light.scale[0], Math.PI / 2.1);
+  }, [light.scale]);
 
   return (
     <group>
-      <spotLight
-        ref={lightRef}
-        position={light.position}
-        intensity={light.intensity}
-        color={light.color}
-        distance={light.distance}
-        decay={1.0}
-        // ✅ FIXED: Scale directly controls the width of the spotlight cone up to 90 degrees max
-        angle={Math.min((Math.PI / 6) * light.scale[0], Math.PI / 2)}
-        penumbra={0.4}
-        castShadow
-        shadow-bias={-0.0005}
-      />
-      {/* ✅ FIXED: Stable native Group tracking node instead of volatile Object3D */}
+      <spotLight ref={lightRef} position={light.position} intensity={light.intensity} color={light.color} distance={light.distance} decay={1.0} angle={dynamicConeAngle} penumbra={0.4} castShadow shadow-bias={-0.0005} />
       <group ref={targetRef} position={targetPosition} />
     </group>
   );
@@ -245,8 +224,8 @@ export function CameraStudioController({ isOrbitDisabled, minPolar, maxPolar, ma
       maxDistance={maxZoom * 5}
       minAzimuthAngle={-Infinity}
       maxAzimuthAngle={Infinity}
-      minPolarAngle={isLocked ? minPolar : 0}
-      maxPolarAngle={isLocked ? maxPolar : Math.PI / 2.2}
+      minPolarAngle={minPolar}
+      maxPolarAngle={maxPolar}
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.PAN }}
     />
   );
