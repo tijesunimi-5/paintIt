@@ -26,26 +26,31 @@ interface AdminPanelProps {
   onSaveToDatabase: () => void;
   cleanViewActive: boolean;
   onToggleCleanView: () => void;
+  isLandscapeLayout: boolean;
 }
 
 export function FloatingAdminPanel({
   activeSurface, sceneLights, selectedLightId, gizmoMode, onGizmoModeChange,
   onAddLight, onSelectLight, onDeleteLight, onScalarUpdate, onVectorUpdate,
   currentColor, onColorChange, onCameraPan, onCameraZoomChange, currentZoomValue,
-  isLocked, onToggleLock, onSaveToDatabase, cleanViewActive, onToggleCleanView
+  isLocked, onToggleLock, onSaveToDatabase, cleanViewActive, onToggleCleanView,
+  isLandscapeLayout
 }: AdminPanelProps) {
   const [position, setPosition] = useState({ x: 16, y: 80 });
   const [size, setSize] = useState({ width: 340, height: 490 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false);
   const [isPainterOpen, setIsPainterOpen] = useState<boolean>(true);
   const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false);
   const [isEngineOpen, setIsEngineOpen] = useState<boolean>(true);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    if ((e.target as HTMLElement).closest('.drag-handle')) {
+      setIsDragging(true);
+      dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -54,9 +59,11 @@ export function FloatingAdminPanel({
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    setIsDragging(true);
-    const touch = e.touches[0];
-    dragStart.current = { x: touch.clientX - position.x, y: touch.clientY - touch.pageY };
+    if ((e.target as HTMLElement).closest('.drag-handle')) {
+      setIsDragging(true);
+      const touch = e.touches[0];
+      dragStart.current = { x: touch.clientX - position.x, y: touch.clientY - touch.pageY };
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -74,8 +81,9 @@ export function FloatingAdminPanel({
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        width: cleanViewActive ? undefined : `${size.width}px`,
-        height: cleanViewActive ? undefined : `${size.height}px`
+        width: cleanViewActive ? undefined : (isLandscapeLayout ? '280px' : `${size.width}px`),
+        // ✅ FIXED: Heights collapse down completely if collapsed or hidden
+        height: (cleanViewActive || isPanelCollapsed) ? undefined : `${size.height}px`
       }}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -85,7 +93,10 @@ export function FloatingAdminPanel({
       className={`absolute pointer-events-auto bg-neutral-900/95 border border-neutral-800 backdrop-blur-md shadow-2xl flex flex-col select-none z-40 transition-all duration-150 ease-out
         ${cleanViewActive
           ? 'w-14 h-14 rounded-full items-center justify-center cursor-move border-cyan-500/60 p-0 overflow-hidden active:scale-95'
-          : 'rounded-2xl overflow-hidden max-w-[calc(100vw-32px)] max-h-[calc(100vh-100px)] md:max-h-[calc(100vh-40px)] landscape:w-72 landscape:h-[calc(100vh-40px)]'
+          : `rounded-2xl overflow-hidden max-w-[calc(100vw-32px)] max-h-[calc(100vh-100px)] md:max-h-[calc(100vh-40px)] ${
+          // ✅ FIXED: Only apply the dynamic landscape height variable when the panel is actually uncollapsed!
+          (isLandscapeLayout && !isPanelCollapsed) ? 'h-[calc(100vh-40px)]' : 'h-auto'
+          }`
         }`}
     >
       {cleanViewActive ? (
@@ -103,10 +114,23 @@ export function FloatingAdminPanel({
         </button>
       ) : (
         <>
-          <div onMouseDown={handleMouseDown} onTouchStart={handleTouchStart} className="drag-handle bg-neutral-950/80 px-4 py-3 border-b border-neutral-800/60 cursor-move flex items-center justify-between shrink-0">
+          {/* DRAGGABLE HEADER TRIGGER LINKED TO COLLAPSE MOTOR */}
+          <div
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest('button')) return;
+              setIsPanelCollapsed(!isPanelCollapsed);
+            }}
+            className="drag-handle bg-neutral-950/80 px-4 py-3 border-b border-neutral-800/60 cursor-pointer flex items-center justify-between shrink-0"
+          >
             <div className="flex flex-col">
-              <span className="text-[11px] font-black tracking-wider text-white uppercase">Workspace HUD</span>
-              <span className="text-[9px] text-neutral-400 font-medium tracking-wide">Target: <span className="text-cyan-400 font-bold font-mono">{activeSurface}</span></span>
+              <span className="text-[11px] font-black tracking-wider text-white uppercase flex items-center gap-1.5">
+                <span>{isPanelCollapsed ? '▶' : '▼'}</span> WORKSPACE HUD
+              </span>
+              {!isPanelCollapsed && (
+                <span className="text-[9px] text-neutral-400 font-medium tracking-wide">Target: <span className="text-cyan-400 font-bold font-mono">{activeSurface}</span></span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button type="button" onClick={onToggleCleanView} className="bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg p-1 px-2 text-[10px] font-black text-neutral-300 uppercase flex items-center gap-1 transition-all">🕶️ Hide</button>
@@ -116,7 +140,8 @@ export function FloatingAdminPanel({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          {/* BOX INTERIOR BODY (COMPLETELY TUCKED AWAY INSTANTLY WHEN COLLAPSED) */}
+          <div className={`flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar ${isPanelCollapsed ? 'hidden' : ''}`}>
             <div className="bg-neutral-950 p-2.5 rounded-xl border border-neutral-800/80 grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -128,7 +153,7 @@ export function FloatingAdminPanel({
               <button type="button" onClick={onSaveToDatabase} className="bg-neutral-900 hover:bg-neutral-800 text-cyan-400 border border-neutral-800 text-[10px] font-black uppercase tracking-wider py-2 rounded-xl transition-all">💾 Sync Live DB</button>
             </div>
 
-            {/* ✅ FIXED: SECTION PAINTER CARD COMPLETELY COLLAPSES ITS CONTENT & BORDERS */}
+            {/* ACCORDION: SURFACE PAINTER */}
             <div className={`transition-all rounded-xl border border-neutral-800/80 overflow-hidden ${isPainterOpen ? 'bg-neutral-950' : 'bg-transparent border-none'}`}>
               <button type="button" onClick={() => setIsPainterOpen(!isPainterOpen)} className={`w-full flex justify-between items-center px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider ${isPainterOpen ? 'bg-neutral-950/90 border-b border-neutral-900/40' : 'bg-neutral-950 rounded-xl border border-neutral-800/60'}`}>
                 <span className="flex items-center gap-1.5">📂 {isPainterOpen ? '▼' : '▶'} Surface Painter Tool</span>
@@ -153,7 +178,7 @@ export function FloatingAdminPanel({
               )}
             </div>
 
-            {/* ✅ FIXED: CAMERA NAVIGATION ACCORDION COMPLETELY COLLAPSES */}
+            {/* ACCORDION: CAMERA HUD */}
             <div className={`transition-all rounded-xl border border-neutral-800/80 overflow-hidden ${isCameraOpen ? 'bg-neutral-950' : 'bg-transparent border-none'}`}>
               <button type="button" onClick={() => setIsCameraOpen(!isCameraOpen)} className={`w-full flex justify-between items-center px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider ${isCameraOpen ? 'bg-neutral-950/90 border-b border-neutral-900/40' : 'bg-neutral-950 rounded-xl border border-neutral-800/60'}`}>
                 <span className="flex items-center gap-1.5">📂 {isCameraOpen ? '▼' : '▶'} Camera Navigation HUD</span>
@@ -180,7 +205,7 @@ export function FloatingAdminPanel({
               )}
             </div>
 
-            {/* ✅ FIXED: 3D LIGHT STUDIO ENGINE COMPLETELY COLLAPSES */}
+            {/* ACCORDION: LIGHT SETUP ENGINE */}
             <div className={`transition-all rounded-xl border border-neutral-800/80 overflow-hidden ${isEngineOpen ? 'bg-neutral-950' : 'bg-transparent border-none'}`}>
               <button type="button" onClick={() => setIsEngineOpen(!isEngineOpen)} className={`w-full flex justify-between items-center px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider ${isEngineOpen ? 'bg-neutral-950/90 border-b border-neutral-900/40' : 'bg-neutral-950 rounded-xl border border-neutral-800/60'}`}>
                 <span className="flex items-center gap-1.5">📂 {isEngineOpen ? '▼' : '▶'} 3D Studio Light Setup</span>
@@ -231,20 +256,12 @@ export function FloatingAdminPanel({
                       </div>
                       <div className="space-y-1">
                         <div className="flex justify-between text-[10px] font-bold text-neutral-400 uppercase"><span>Beam Spread / Size</span><span className="text-amber-400 font-mono">{activeLight.scale[0].toFixed(2)}x</span></div>
-                        <input
-                          type="range"
-                          min="0.2"
-                          max="5.0"
-                          step="0.1"
-                          value={activeLight.scale[0]}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            onVectorUpdate('scale', 0, val);
-                            onVectorUpdate('scale', 1, val);
-                            onVectorUpdate('scale', 2, val);
-                          }}
-                          className="w-full accent-amber-500 bg-neutral-950 h-1.5 rounded-lg appearance-none cursor-pointer"
-                        />
+                        <input type="range" min="0.2" max="5.0" step="0.1" value={activeLight.scale[0]} onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          onVectorUpdate('scale', 0, val);
+                          onVectorUpdate('scale', 1, val);
+                          onVectorUpdate('scale', 2, val);
+                        }} className="w-full accent-amber-500 bg-neutral-950 h-1.5 rounded-lg appearance-none cursor-pointer" />
                       </div>
 
                       <div className="border-t border-neutral-800/60 pt-3 space-y-3">
@@ -285,15 +302,11 @@ export function FloatingAdminPanel({
                 </div>
               )}
             </div>
-
           </div>
 
-          <div className="bg-neutral-950/40 p-2 border-t border-neutral-800/60 flex items-center justify-between shrink-0 landscape:hidden">
+          {/* DYNAMIC FOOTER */}
+          <div className={`bg-neutral-950/40 p-2 border-t border-neutral-800/60 flex items-center justify-between shrink-0 landscape:hidden ${isPanelCollapsed ? 'hidden' : ''}`}>
             <span className="text-[8px] text-neutral-600 font-mono tracking-widest uppercase">HUD_SECURE_V1.55</span>
-            <div className="hidden md:flex flex-col gap-1 w-24">
-              <input type="range" min="280" max="600" step="10" value={size.width} onChange={(e) => setSize(p => ({ ...p, width: parseInt(e.target.value) }))} className="w-full accent-neutral-500 h-0.5 bg-neutral-950 rounded" />
-              <input type="range" min="300" max="800" step="10" value={size.height} onChange={(e) => setSize(p => ({ ...p, height: parseInt(e.target.value) }))} className="w-full accent-neutral-500 h-0.5 bg-neutral-950 rounded" />
-            </div>
           </div>
         </>
       )}

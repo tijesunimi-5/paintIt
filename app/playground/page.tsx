@@ -32,13 +32,11 @@ export default function DedicatedPlayground() {
 
   const [hasHydrated, setHasHydrated] = useState<boolean>(false);
 
-  // RESPONSIVE LAYOUT STATES
-  const [isPortrait, setIsPortrait] = useState<boolean>(false);
-  const [dismissedHint, setDismissedHint] = useState<boolean>(false);
+  // 🎥 MANUAL ASPECT OVERRIDE STATE
+  const [isLandscapeOverride, setIsLandscapeOverride] = useState<boolean>(false);
 
   const [cameraConfig, setCameraConfig] = useControls('Camera Limits', () => ({
     maxZoomDistance: { value: 0.55, min: 0.1, max: 15.0, step: 0.05, label: 'Max Out Zoom' },
-    // ✅ Sliders scaled directly on true radian boundaries (0 = straight up, 3.14 = straight down)
     ceilingLimitAngle: { value: 0.0, min: 0.0, max: 3.14, step: 0.05, label: 'Ceiling Stop' },
     floorLimitAngle: { value: 1.85, min: 0.0, max: 3.14, step: 0.05, label: 'Floor Stop' },
   }));
@@ -55,19 +53,12 @@ export default function DedicatedPlayground() {
       const savedCamConfig = localStorage.getItem('paintit_camera_bounds');
 
       queueMicrotask(() => {
-        setIsPortrait(window.innerHeight > window.innerWidth);
         if (savedLock) setIsLocked(JSON.parse(savedLock));
         if (savedColors) setRoomColors(JSON.parse(savedColors));
         if (savedLights) setSceneLights(JSON.parse(savedLights));
         if (savedCamConfig) setCameraConfig(JSON.parse(savedCamConfig));
         setHasHydrated(true);
       });
-
-      const handleResize = () => {
-        setIsPortrait(window.innerHeight > window.innerWidth);
-      };
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
     }
   }, [setCameraConfig]);
 
@@ -140,11 +131,16 @@ export default function DedicatedPlayground() {
   return (
     <div className="fixed inset-0 bg-neutral-950 w-screen h-screen overflow-hidden select-none z-50 font-sans">
 
-      {/* LANDSCAPE RECOMMENDATION BANNER */}
-      {isPortrait && !dismissedHint && !cleanViewActive && (
-        <div className="pointer-events-auto absolute top-3 left-4 right-4 z-50 bg-cyan-500 text-neutral-950 px-3 py-2 rounded-xl flex items-center justify-between text-[10px] font-black uppercase tracking-wider shadow-xl border border-cyan-400/30">
-          <span>🎥 Turn phone sideways for full cinema workspace layout!</span>
-          <button onClick={() => setDismissedHint(true)} className="bg-neutral-950/20 hover:bg-neutral-950/40 rounded-md p-1 px-2 text-xs transition-colors">✕</button>
+      {/* 🎥 THE ASPECT RATIO TOGGLE FLOATING ACTION HEADER BAR */}
+      {!cleanViewActive && (
+        <div className="pointer-events-auto absolute top-3 left-4 right-4 z-50 max-w-sm mx-auto bg-neutral-900/90 border border-neutral-800 backdrop-blur-md p-1.5 rounded-xl flex items-center justify-between shadow-xl">
+          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 pl-2">Viewport Lens Matrix</span>
+          <button
+            onClick={() => setIsLandscapeOverride(!isLandscapeOverride)}
+            className={`px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border transition-all ${isLandscapeOverride ? 'bg-cyan-500 text-neutral-950 border-cyan-400' : 'bg-neutral-950 text-cyan-400 border-neutral-800'}`}
+          >
+            {isLandscapeOverride ? '🎥 Landscape View Enabled' : '📱 Force Portrait Mode'}
+          </button>
         </div>
       )}
 
@@ -156,8 +152,8 @@ export default function DedicatedPlayground() {
       </div>
 
       <div className="absolute inset-0 w-full h-full z-10 bg-neutral-900">
-        {/* ✅ FIXED APERTURE: Restores square, straight-edged room perspective shapes without wide fish-eye distortion cascades */}
-        <Canvas shadows camera={{ position: [0, 1.4, 2.2], fov: isPortrait ? 55 : 45 }}>
+        {/* ✅ LOOKS AT MANUAL STATE: Uses 45 degree FOV instantly if landscape override toggle is pressed */}
+        <Canvas shadows camera={{ position: [0, 1.4, 2.2], fov: isLandscapeOverride ? 45 : 55 }}>
           <PlaygroundLighting isNight={globalEnvironment.isNightMode} showHelpers={!cleanViewActive && !isLocked} />
 
           <Suspense fallback={null}>
@@ -180,11 +176,8 @@ export default function DedicatedPlayground() {
             controlsRef={controlsRef}
             isOrbitDisabled={false}
             maxZoom={cameraConfig.maxZoomDistance}
-
-            // ✅ FIXED: Raw rads cleanly handed over directly to control elements
             minPolar={cameraConfig.ceilingLimitAngle}
             maxPolar={cameraConfig.floorLimitAngle}
-
             isLocked={isLocked}
           />
         </Canvas>
@@ -192,7 +185,7 @@ export default function DedicatedPlayground() {
 
       <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col justify-between p-4 md:p-6">
         {showInstructions && !cleanViewActive ? (
-          <div className="pointer-events-auto w-full max-w-sm mx-auto bg-neutral-900/90 border border-neutral-800 backdrop-blur-md px-4 py-3 rounded-xl shadow-xl flex items-start justify-between gap-3 transition-all mt-14 md:mt-2">
+          <div className="pointer-events-auto w-full max-w-sm mx-auto bg-neutral-900/90 border border-neutral-800 backdrop-blur-md px-4 py-3 rounded-xl shadow-xl flex items-start justify-between gap-3 transition-all mt-16">
             <div className="text-[11px] text-neutral-300 leading-relaxed font-medium">
               <span className="text-cyan-400 font-bold block mb-0.5">📱 Touch Operations:</span>
               • <span className="text-white font-bold">Tap geometry mesh</span> to select paint targets.<br />
@@ -244,6 +237,8 @@ export default function DedicatedPlayground() {
             setCleanViewActive(nextMode);
             if (nextMode) setSelectedLightId(null);
           }}
+          // ✅ Pass down state to keep structural layout updates synced up
+          isLandscapeLayout={isLandscapeOverride}
         />
       )}
     </div>
