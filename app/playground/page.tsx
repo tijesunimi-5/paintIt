@@ -32,6 +32,10 @@ export default function DedicatedPlayground() {
 
   const [hasHydrated, setHasHydrated] = useState<boolean>(false);
 
+  // RESPONSIVE LAYOUT STATES
+  const [isPortrait, setIsPortrait] = useState<boolean>(false);
+  const [dismissedHint, setDismissedHint] = useState<boolean>(false);
+
   const [cameraConfig, setCameraConfig] = useControls('Camera Limits', () => ({
     maxZoomDistance: { value: 0.55, min: 0.1, max: 2.5, step: 0.05, label: 'Max Out Zoom' },
     ceilingLimitAngle: { value: 2.3, min: 1.0, max: 3.14, step: 0.05, label: 'Ceiling Stop' },
@@ -42,8 +46,6 @@ export default function DedicatedPlayground() {
     isNightMode: { value: false, label: '🌙 Night Mode' },
   });
 
-  // ✅ FIXED: All initial state state-sets are batched together cleanly outside the primary thread 
-  // to avoid cascading re-renders and satisfy ESLint rules permanently.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedLock = localStorage.getItem('paintit_config_locked');
@@ -51,13 +53,21 @@ export default function DedicatedPlayground() {
       const savedLights = localStorage.getItem('paintit_scene_lights');
       const savedCamConfig = localStorage.getItem('paintit_camera_bounds');
 
+      // ✅ FIXED: Safely tucked away inside the macro task queue to kill the synchronous render cascade completely
       queueMicrotask(() => {
+        setIsPortrait(window.innerHeight > window.innerWidth);
         if (savedLock) setIsLocked(JSON.parse(savedLock));
         if (savedColors) setRoomColors(JSON.parse(savedColors));
         if (savedLights) setSceneLights(JSON.parse(savedLights));
         if (savedCamConfig) setCameraConfig(JSON.parse(savedCamConfig));
         setHasHydrated(true);
       });
+
+      const handleResize = () => {
+        setIsPortrait(window.innerHeight > window.innerWidth);
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
     }
   }, [setCameraConfig]);
 
@@ -129,7 +139,16 @@ export default function DedicatedPlayground() {
 
   return (
     <div className="fixed inset-0 bg-neutral-950 w-screen h-screen overflow-hidden select-none z-50 font-sans">
-      <div className={cleanViewActive || isLocked || !hasHydrated ? 'hidden' : 'absolute top-4 right-4 z-50 max-w-45 md:max-w-xs'}>
+
+      {/* LANDSCAPE RECOMMENDATION BANNER */}
+      {isPortrait && !dismissedHint && !cleanViewActive && (
+        <div className="pointer-events-auto absolute top-3 left-4 right-4 z-50 bg-cyan-500 text-neutral-950 px-3 py-2 rounded-xl flex items-center justify-between text-[10px] font-black uppercase tracking-wider shadow-xl border border-cyan-400/30">
+          <span>🎥 Turn phone sideways for full cinema workspace layout!</span>
+          <button onClick={() => setDismissedHint(true)} className="bg-neutral-950/20 hover:bg-neutral-950/40 rounded-md p-1 px-2 text-xs transition-colors">✕</button>
+        </div>
+      )}
+
+      <div className={cleanViewActive || isLocked || !hasHydrated ? 'hidden' : 'absolute top-16 right-4 z-50 max-w-45 md:max-w-xs'}>
         <Leva
           oneLineLabels
           theme={{ sizes: { controlWidth: '90px' }, fontSizes: { root: '10px' } }}
@@ -137,7 +156,7 @@ export default function DedicatedPlayground() {
       </div>
 
       <div className="absolute inset-0 w-full h-full z-10 bg-neutral-900">
-        <Canvas shadows camera={{ position: [0, 1.4, 0.4], fov: 68 }}>
+        <Canvas shadows camera={{ position: [0, 1.4, 0.4], fov: isPortrait ? 88 : 68 }}>
           <PlaygroundLighting isNight={globalEnvironment.isNightMode} showHelpers={!cleanViewActive && !isLocked} />
 
           <Suspense fallback={null}>
@@ -159,17 +178,17 @@ export default function DedicatedPlayground() {
           <CameraStudioController
             controlsRef={controlsRef}
             isOrbitDisabled={false}
-            isLocked={isLocked}
             maxZoom={cameraConfig.maxZoomDistance}
             minPolar={Math.PI / cameraConfig.ceilingLimitAngle}
             maxPolar={Math.PI / cameraConfig.floorLimitAngle}
+            isLocked={isLocked}
           />
         </Canvas>
       </div>
 
       <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col justify-between p-4 md:p-6">
         {showInstructions && !cleanViewActive ? (
-          <div className="pointer-events-auto w-full max-w-sm mx-auto bg-neutral-900/90 border border-neutral-800 backdrop-blur-md px-4 py-3 rounded-xl shadow-xl flex items-start justify-between gap-3 transition-all mt-2">
+          <div className="pointer-events-auto w-full max-w-sm mx-auto bg-neutral-900/90 border border-neutral-800 backdrop-blur-md px-4 py-3 rounded-xl shadow-xl flex items-start justify-between gap-3 transition-all mt-14 md:mt-2">
             <div className="text-[11px] text-neutral-300 leading-relaxed font-medium">
               <span className="text-cyan-400 font-bold block mb-0.5">📱 Touch Operations:</span>
               • <span className="text-white font-bold">Tap geometry mesh</span> to select paint targets.<br />
@@ -179,22 +198,10 @@ export default function DedicatedPlayground() {
             <button onClick={() => setShowInstructions(false)} className="text-neutral-500 hover:text-white text-xs font-bold px-1.5 py-0.5 rounded">✕</button>
           </div>
         ) : <div />}
-
-        <div className="flex justify-between items-end w-full">
-          <button
-            type="button"
-            onClick={() => {
-              setCleanViewActive(!cleanViewActive);
-              if (!cleanViewActive) setSelectedLightId(null);
-            }}
-            className="pointer-events-auto w-12 h-12 bg-neutral-900 border border-neutral-800 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-all text-xl"
-          >
-            {cleanViewActive ? '👁️' : '🕶️'}
-          </button>
-        </div>
+        <div />
       </div>
 
-      {!cleanViewActive && hasHydrated && (
+      {hasHydrated && (
         <FloatingAdminPanel
           activeSurface={activeSurface}
           sceneLights={sceneLights}
@@ -227,6 +234,12 @@ export default function DedicatedPlayground() {
           isLocked={isLocked}
           onToggleLock={handleToggleLock}
           onSaveToDatabase={handleSaveToDatabase}
+          cleanViewActive={cleanViewActive}
+          onToggleCleanView={() => {
+            const nextMode = !cleanViewActive;
+            setCleanViewActive(nextMode);
+            if (nextMode) setSelectedLightId(null);
+          }}
         />
       )}
     </div>
