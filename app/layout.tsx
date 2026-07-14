@@ -1,18 +1,17 @@
-"use client";
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
-import { AlertProvider } from "@/context/AlertContext"; // Your active global toast alert banner component
+import { AlertProvider } from "@/context/AlertContext";
 import { TrafficTracker } from "@/components/analytics/TrafficTracker";
-import { useEffect } from "react";
+import { ServiceWorkerRegisterEngine } from "./ServiceWorkerRegisterEngine"; // Rendered below
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-jakarta"
 });
 
-// 1. ADVANCED METADATA MATRIX CONFIGURATION
+// ✅ SAFE SERVER-SIDE SEO EXTRACTIONS (No "use client" at the top)
 export const metadata: Metadata = {
   title: {
     default: "PaintIt // Interactive 3D Room Studio & Color Customizer",
@@ -69,7 +68,6 @@ export const metadata: Metadata = {
   },
 };
 
-// 2. VIEWPORT MATRIX OVERRIDES
 export const viewport: Viewport = {
   themeColor: "#09090b",
   width: "device-width",
@@ -78,30 +76,20 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-
-
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  useEffect(() => {
-    if ('serviceWorker' in navigator && window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then((reg) => console.log('🛡️ PaintIt Service Worker Online:', reg.scope))
-          .catch((err) => console.warn('❌ Service Worker Registration Aborted:', err));
-      });
-    }
-  }, []);
-
   return (
     <html
       lang="en"
-      className={`scroll-smooth`}
+      className="scroll-smooth"
     >
       <body className={`${jakarta.variable} font-sans bg-neutral-950 text-neutral-100 antialiased overflow-x-hidden`}>
-        {/* ✅ WRAP CHILDREN IN GLOBAL CONTEXT ENGINES */}
+        {/* ✅ Injects browser runtime hooks cleanly on server-side layouts */}
+        <ServiceWorkerRegisterEngine />
+
         <AlertProvider>
           <AuthProvider>
             <TrafficTracker />
