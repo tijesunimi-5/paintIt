@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 export function TrafficTracker() {
   const pathname = usePathname();
   const currentSectionRef = useRef<string>("HERO");
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   // 📡 1. Heartbeat Interval Loop (Kept Lightweight)
   useEffect(() => {

@@ -13,6 +13,15 @@ import {
 import { FloatingAdminPanel } from '@/components/canvas/Admin-panel';
 import { DynamicLightInstance } from '@/types/index';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import { useAlert } from "@/context/AlertContext"; 
+import { useAuth } from "@/context/AuthContext";
+
+interface SafariNavigator extends Navigator {
+  standalone?: boolean;
+}
+
+// 🔑 CORE BACKEND GATEWAY ROUTER (Point to your active Express Port configuration)
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function DedicatedPlayground() {
   const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -31,9 +40,16 @@ export default function DedicatedPlayground() {
   });
 
   const [hasHydrated, setHasHydrated] = useState<boolean>(false);
-
-  // 🎥 MANUAL ASPECT OVERRIDE STATE
   const [isLandscapeOverride, setIsLandscapeOverride] = useState<boolean>(false);
+
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isPWA, setIsPWA] = useState<boolean>(false);
+
+  const [designId, setDesignId] = useState<string>('tmpl_hostel_lux');
+  const [designTitle, setDesignTitle] = useState<string>('Luxury Minimalist Living Room');
+
+  const { showToast } = useAlert(); // 💡 Initialize your premium alert context[cite: 5]
+  const { accessToken } = useAuth();
 
   const [cameraConfig, setCameraConfig] = useControls('Camera Limits', () => ({
     maxZoomDistance: { value: 0.55, min: 0.1, max: 15.0, step: 0.05, label: 'Max Out Zoom' },
@@ -45,39 +61,146 @@ export default function DedicatedPlayground() {
     isNightMode: { value: false, label: '🌙 Night Mode' },
   });
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedLock = localStorage.getItem('paintit_config_locked');
-      const savedColors = localStorage.getItem('paintit_room_colors');
-      const savedLights = localStorage.getItem('paintit_scene_lights');
-      const savedCamConfig = localStorage.getItem('paintit_camera_bounds');
-
-      queueMicrotask(() => {
-        if (savedLock) setIsLocked(JSON.parse(savedLock));
-        if (savedColors) setRoomColors(JSON.parse(savedColors));
-        if (savedLights) setSceneLights(JSON.parse(savedLights));
-        if (savedCamConfig) setCameraConfig(JSON.parse(savedCamConfig));
-        setHasHydrated(true);
-      });
-    }
-  }, [setCameraConfig]);
-
   const handleToggleLock = () => {
     const nextLockState = !isLocked;
     setIsLocked(nextLockState);
     localStorage.setItem('paintit_config_locked', JSON.stringify(nextLockState));
-    localStorage.setItem('paintit_room_colors', JSON.stringify(roomColors));
-    localStorage.setItem('paintit_scene_lights', JSON.stringify(sceneLights));
-    localStorage.setItem('paintit_camera_bounds', JSON.stringify(cameraConfig));
-    if (nextLockState) setSelectedLightId(null);
   };
 
-  const handleSaveToDatabase = () => {
-    const payload = { roomColors, sceneLights, cameraConfig, globalEnvironment };
-    console.log('📦 Syncing to Database Schema:', payload);
-    alert('🚀 Sandbox configurations successfully saved to Database endpoint array!');
-  };
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as SafariNavigator).standalone === true;
+
+    const params = new URLSearchParams(window.location.search);
+    const adminCheck = params.get('edit') === 'true';
+    const dynamicIdParam = params.get('id') || 'tmpl_hostel_lux';
+
+    const savedColors = localStorage.getItem('paintit_room_colors');
+    const savedLights = localStorage.getItem('paintit_scene_lights');
+
+    const hydrateStudioEnvironment = async () => {
+      setIsPWA(isStandalone);
+      setIsAdmin(adminCheck);
+      setDesignId(dynamicIdParam);
+
+      try {
+        // ✅ CONNECTED TO NODE/EXPRESS CORE INSTANCE:
+        const res = await fetch(`${API_BASE_URL}/api/visualizations/catalog/${dynamicIdParam}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data) {
+            if (data.title) setDesignTitle(data.title);
+            if (data.default_room_data) setRoomColors(data.default_room_data);
+            if (data.lighting_settings) setSceneLights(data.lighting_settings);
+            if (data.camera_settings) {
+              setCameraConfig({
+                maxZoomDistance: data.camera_settings.maxZoomDistance ?? 0.55,
+                ceilingLimitAngle: data.camera_settings.ceilingLimitAngle ?? 0.0,
+                floorLimitAngle: data.camera_settings.floorLimitAngle ?? 1.85,
+              });
+
+              setTimeout(() => {
+                if (controlsRef.current && data.camera_settings.position) {
+                  controlsRef.current.object.position.fromArray(data.camera_settings.position);
+                  if (data.camera_settings.target) {
+                    controlsRef.current.target.fromArray(data.camera_settings.target);
+                  }
+                  controlsRef.current.update();
+                }
+              }, 120);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("⚠️ Server endpoint unmapped, rendering locally:", err);
+        if (savedColors) setRoomColors(JSON.parse(savedColors));
+        if (savedLights) setSceneLights(JSON.parse(savedLights));
+      } finally {
+        setHasHydrated(true);
+      }
+    };
+
+    hydrateStudioEnvironment();
+  }, [setCameraConfig]);
+
+  const handleSaveToDatabase = async () => {
+    if (!controlsRef.current) return;
+
+    const currentCameraPosition = controlsRef.current.object.position.toArray();
+    const currentCameraTarget = controlsRef.current.target.toArray();
+
+    // 🔑 1. DIRECTLY INTERCEPT ACCESSTOKEN FROM AUTHCONTEXT TYPES
+    // Uses your exact context variable name, falling back safely to your specific storage keys[cite: 6]
+    const token = accessToken
+      || localStorage.getItem('paintit_access_token')
+      || localStorage.getItem('accessToken')
+      || localStorage.getItem('token')
+      || '';
+
+    if (!token) {
+      showToast({
+        message: '⚠️ Session Expired or Token Missing: Please open your primary login page, re-authenticate your profile, and try again.',
+        severity: 'error',
+        duration: 5000
+      });
+      return;
+    }
+
+    const schemaPayload = {
+      id: designId,
+      title: designTitle,
+      camera_settings: {
+        position: currentCameraPosition,
+        target: currentCameraTarget,
+        maxZoomDistance: cameraConfig.maxZoomDistance,
+        ceilingLimitAngle: cameraConfig.ceilingLimitAngle,
+        floorLimitAngle: cameraConfig.floorLimitAngle
+      },
+      lighting_settings: sceneLights,
+      default_room_data: roomColors,
+      global_environment: globalEnvironment
+    };
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/visualizations/catalog/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`
+        },
+        body: JSON.stringify(schemaPayload)
+      });
+
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        responseData = { error: responseText };
+      }
+
+      if (response.ok && (responseData.success || !responseData.error)) {
+        showToast({
+          message: `🚀 "${designTitle}" configurations synchronized successfully to your database row records!`,
+          severity: 'success'
+        });
+      } else {
+        showToast({
+          message: `❌ Sync Rejected (${response.status}): ${responseData.error || 'The security engine dropped this transaction.'}`,
+          severity: 'error'
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      showToast({
+        message: '💾 Connection Error: Backend server appears offline. Check terminal console output tabs.',
+        severity: 'error'
+      });
+    }
+  };
+  
   const handleManualPan = (direction: 'up' | 'down' | 'left' | 'right', step = 0.25) => {
     const controls = controlsRef.current;
     if (!controls) return;
@@ -131,44 +254,84 @@ export default function DedicatedPlayground() {
   return (
     <div className="fixed inset-0 bg-neutral-950 w-screen h-screen overflow-hidden select-none z-50 font-sans">
 
-      {/* 🎥 THE ASPECT RATIO TOGGLE FLOATING ACTION HEADER BAR */}
+      {/* 🏠 PWA INTERFACE ESCAPE ROUTE */}
+      {isPWA && (
+        <button
+          onClick={() => window.location.href = '/'}
+          className="pointer-events-auto absolute top-3 left-4 z-50 bg-neutral-900/90 border border-neutral-800 p-2.5 px-3.5 rounded-xl text-[11px] font-black text-neutral-400 hover:text-white uppercase tracking-wider backdrop-blur-md shadow-xl"
+        >
+          🏠 Studio Home
+        </button>
+      )}
+
+      {/* 🎥 UTILITIES OVERLAY LAYER */}
       {!cleanViewActive && (
-        <div className="pointer-events-auto absolute top-3 left-4 right-4 z-50 max-w-sm mx-auto bg-neutral-900/90 border border-neutral-800 backdrop-blur-md p-1.5 rounded-xl flex items-center justify-between shadow-xl">
-          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 pl-2">Viewport Lens Matrix</span>
+        <div className={`pointer-events-auto absolute top-3 left-4 right-4 z-50 max-w-xl mx-auto bg-neutral-900/90 border border-neutral-800 backdrop-blur-md p-1.5 rounded-xl flex items-center justify-between gap-3 shadow-xl ${isPWA ? 'translate-x-12' : ''}`}>
+
+          <button
+            onClick={() => setIsAdmin(!isAdmin)}
+            className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg border transition-all shrink-0 ${isAdmin ? 'bg-amber-500 text-neutral-950 border-amber-400' : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'}`}
+          >
+            {isAdmin ? '🛠️ Edit' : '👁️ Preview'}
+          </button>
+
+          {isAdmin ? (
+            <input
+              type="text"
+              value={designTitle}
+              onChange={(e) => setDesignTitle(e.target.value)}
+              className="bg-neutral-950 text-neutral-200 border border-neutral-800 rounded-lg px-2 py-1 text-[11px] font-bold tracking-wide w-full max-w-[180px] focus:outline-hidden focus:border-cyan-500"
+              placeholder="Design Title..."
+            />
+          ) : (
+            <span className="text-[11px] font-black text-neutral-200 tracking-wide truncate max-w-[180px]">{designTitle}</span>
+          )}
+
           <button
             onClick={() => setIsLandscapeOverride(!isLandscapeOverride)}
-            className={`px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border transition-all ${isLandscapeOverride ? 'bg-cyan-500 text-neutral-950 border-cyan-400' : 'bg-neutral-950 text-cyan-400 border-neutral-800'}`}
+            className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg border transition-all shrink-0 ${isLandscapeOverride ? 'bg-cyan-500 text-neutral-950 border-cyan-400' : 'bg-neutral-950 text-cyan-400 border-neutral-800'}`}
           >
-            {isLandscapeOverride ? '🎥 Landscape View Enabled' : '📱 Force Portrait Mode'}
+            {isLandscapeOverride ? '🎥 Landscape' : '📱 Portrait'}
           </button>
         </div>
       )}
 
-      <div className={cleanViewActive || isLocked || !hasHydrated ? 'hidden' : 'absolute top-16 right-4 z-50 max-w-45 md:max-w-xs'}>
+      {/* LEVA FOLDERS CONTAINER */}
+      <div
+        className={`absolute top-18 right-4 z-50 transition-all ${cleanViewActive || isLocked || !hasHydrated || !isAdmin ? 'hidden' : 'block'
+          }`}
+      >
         <Leva
           oneLineLabels
-          theme={{ sizes: { controlWidth: '90px' }, fontSizes: { root: '10px' } }}
+          fill={false} // 🎨 Stops Leva from aggressively stretching or breaking out of bounds
+          theme={{
+            sizes: {
+              controlWidth: '100px',
+              rootWidth: '280px' // 🎯 Forces a clean, standard width dimension so everything fits comfortably
+            },
+            fontSizes: { root: '11px' }
+          }}
         />
       </div>
 
+      {/* THREE.JS CANVAS CONTAINER ENGINE */}
       <div className="absolute inset-0 w-full h-full z-10 bg-neutral-900">
-        {/* ✅ LOOKS AT MANUAL STATE: Uses 45 degree FOV instantly if landscape override toggle is pressed */}
         <Canvas shadows camera={{ position: [0, 1.4, 2.2], fov: isLandscapeOverride ? 45 : 55 }}>
-          <PlaygroundLighting isNight={globalEnvironment.isNightMode} showHelpers={!cleanViewActive && !isLocked} />
+          <PlaygroundLighting isNight={globalEnvironment.isNightMode} showHelpers={!cleanViewActive && !isLocked && isAdmin} />
 
           <Suspense fallback={null}>
             <StudioBlenderModelMesh
               modelUrl="/models/selfcon.glb"
               surfaceStates={roomColors}
               onTargetSelect={(meshName: string) => {
-                if (!cleanViewActive) setActiveSurface(meshName);
+                if (!cleanViewActive && isAdmin) setActiveSurface(meshName);
               }}
             />
           </Suspense>
 
           <PlaygroundLightsEngine lights={sceneLights} />
 
-          {activeLightData && !cleanViewActive && !isLocked && (
+          {activeLightData && !cleanViewActive && !isLocked && isAdmin && (
             <AdminTransformGizmo activeLight={activeLightData} mode={gizmoMode} onTransformUpdate={updateActiveLightTransform} />
           )}
 
@@ -176,29 +339,20 @@ export default function DedicatedPlayground() {
             controlsRef={controlsRef}
             isOrbitDisabled={false}
             maxZoom={cameraConfig.maxZoomDistance}
-            minPolar={cameraConfig.ceilingLimitAngle}
-            maxPolar={cameraConfig.floorLimitAngle}
-            isLocked={isLocked}
+            minPolar={isAdmin ? cameraConfig.ceilingLimitAngle : 0}
+            maxPolar={isAdmin ? cameraConfig.floorLimitAngle : Math.PI / 2}
+            isLocked={!isAdmin || isLocked}
           />
         </Canvas>
       </div>
 
-      <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col justify-between p-4 md:p-6">
-        {showInstructions && !cleanViewActive ? (
-          <div className="pointer-events-auto w-full max-w-sm mx-auto bg-neutral-900/90 border border-neutral-800 backdrop-blur-md px-4 py-3 rounded-xl shadow-xl flex items-start justify-between gap-3 transition-all mt-16">
-            <div className="text-[11px] text-neutral-300 leading-relaxed font-medium">
-              <span className="text-cyan-400 font-bold block mb-0.5">📱 Touch Operations:</span>
-              • <span className="text-white font-bold">Tap geometry mesh</span> to select paint targets.<br />
-              • <span className="text-white font-bold">1 Finger Swipe</span> to orbit rotate scenery bounds.<br />
-              • <span className="text-white font-bold">2 Finger Swipe</span> to pan translate tracking positions.
-            </div>
-            <button onClick={() => setShowInstructions(false)} className="text-neutral-500 hover:text-white text-xs font-bold px-1.5 py-0.5 rounded">✕</button>
-          </div>
-        ) : <div />}
-        <div />
-      </div>
+      <div
+        className="absolute top-0 left-0 right-0 h-5 z-50 pointer-events-none bg-linear-to-b from-neutral-950/40 to-transparent"
+        style={{ touchAction: 'auto' }}
+      />
 
-      {hasHydrated && (
+      {/* HUD PANEL LAYER DOCK */}
+      {hasHydrated && isAdmin && (
         <FloatingAdminPanel
           activeSurface={activeSurface}
           sceneLights={sceneLights}
@@ -237,7 +391,6 @@ export default function DedicatedPlayground() {
             setCleanViewActive(nextMode);
             if (nextMode) setSelectedLightId(null);
           }}
-          // ✅ Pass down state to keep structural layout updates synced up
           isLandscapeLayout={isLandscapeOverride}
         />
       )}

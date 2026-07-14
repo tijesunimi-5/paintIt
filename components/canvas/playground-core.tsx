@@ -177,14 +177,32 @@ function SpotLightInstance({ light }: { light: DynamicLightInstance }) {
   );
 }
 
-interface CameraControllerProps { isOrbitDisabled: boolean; minPolar: number; maxPolar: number; maxZoom: number; controlsRef: React.RefObject<OrbitControlsImpl | null>; isLocked: boolean; }
+interface CameraControllerProps {
+  isOrbitDisabled: boolean;
+  minPolar: number;
+  maxPolar: number;
+  maxZoom: number;
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
+  isLocked: boolean;
+}
+
 export function CameraStudioController({ isOrbitDisabled, minPolar, maxPolar, maxZoom, controlsRef, isLocked }: CameraControllerProps) {
   useEffect(() => {
-    if (controlsRef.current) {
-      controlsRef.current.target.set(0, 1.5, 0);
-      controlsRef.current.update();
+    const controls = controlsRef.current;
+    if (controls) {
+      // 🎯 FIX THE TARGET: If user mode (!isLocked means admin mode, isLocked means presentation user mode)
+      if (isLocked) {
+        // Look slightly to the left by shifting the target point on the X axis, and elevate the focal gaze!
+        controls.target.set(-0.5, 1.85, 0);
+        controls.object.position.set(0.4, 1.85, 2.0); // Physically lift the camera body right here
+      } else {
+        // Standard sandbox admin viewing mode centers normally
+        controls.target.set(0, 1.5, 0);
+        controls.object.position.set(0, 1.4, 2.2);
+      }
+      controls.update();
     }
-  }, [controlsRef]);
+  }, [controlsRef, isLocked]);
 
   useEffect(() => {
     const controls = controlsRef.current;
@@ -192,6 +210,7 @@ export function CameraStudioController({ isOrbitDisabled, minPolar, maxPolar, ma
 
     const handleCameraChange = () => {
       const target = controls.target;
+      // Keep your existing boundary clamp coordinates intact...
       const maxPanX = 3.5;
       const minPanY = 0.2;
       const maxPanY = 5.5;
@@ -216,10 +235,10 @@ export function CameraStudioController({ isOrbitDisabled, minPolar, maxPolar, ma
     <OrbitControls
       ref={controlsRef as React.RefObject<OrbitControlsImpl>}
       enabled={!isOrbitDisabled}
-      enablePan={true}
+      enablePan={!isLocked} // Ensure users can't shift their position away from our standpoint
       enableZoom={true}
       enableDamping
-      dampingFactor={0.08}
+      dampingFactor={0.04}
       minDistance={0.1}
       maxDistance={maxZoom * 5}
       minAzimuthAngle={-Infinity}
