@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "PaintIt",
     description:
       "Premium interactive 3D architectural visualization framework tool.",
-    start_url: "/playground",
+    start_url: "/",
     display: "standalone",
     background_color: "#09090b",
     theme_color: "#09090b",
