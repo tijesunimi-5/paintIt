@@ -13,7 +13,7 @@ import {
 import { FloatingAdminPanel } from '@/components/canvas/Admin-panel';
 import { DynamicLightInstance } from '@/types/index';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { useAlert } from "@/context/AlertContext"; 
+import { useAlert } from "@/context/AlertContext";
 import { useAuth } from "@/context/AuthContext";
 
 interface SafariNavigator extends Navigator {
@@ -45,7 +45,7 @@ export default function DedicatedPlayground() {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isPWA, setIsPWA] = useState<boolean>(false);
 
-  const [designId, setDesignId] = useState<string>('tmpl_hostel_lux');
+  const [designId, setDesignId] = useState<string>('b873e348-73da-4a57-b062-1b1511116c4c');
   const [designTitle, setDesignTitle] = useState<string>('Luxury Minimalist Living Room');
 
   const { showToast } = useAlert(); // 💡 Initialize your premium alert context[cite: 5]
@@ -200,7 +200,7 @@ export default function DedicatedPlayground() {
       });
     }
   };
-  
+
   const handleManualPan = (direction: 'up' | 'down' | 'left' | 'right', step = 0.25) => {
     const controls = controlsRef.current;
     if (!controls) return;
