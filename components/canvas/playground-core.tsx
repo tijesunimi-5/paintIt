@@ -187,20 +187,24 @@ interface CameraControllerProps {
 }
 
 export function CameraStudioController({ isOrbitDisabled, minPolar, maxPolar, maxZoom, controlsRef, isLocked }: CameraControllerProps) {
+  // 🎯 Ref flags initial placement check so panels toggles won't fire resets
+  const hasInitialized = useRef(false);
+
   useEffect(() => {
     const controls = controlsRef.current;
-    if (controls) {
-      // 🎯 FIX THE TARGET: If user mode (!isLocked means admin mode, isLocked means presentation user mode)
+    if (!controls) return;
+
+    // Run positioning configuration ONLY once during mounting or user mode shifts
+    if (!hasInitialized.current) {
       if (isLocked) {
-        // Look slightly to the left by shifting the target point on the X axis, and elevate the focal gaze!
         controls.target.set(-0.5, 1.85, 0);
-        controls.object.position.set(0.4, 1.85, 2.0); // Physically lift the camera body right here
+        controls.object.position.set(0.4, 1.85, 2.0);
       } else {
-        // Standard sandbox admin viewing mode centers normally
         controls.target.set(0, 1.5, 0);
         controls.object.position.set(0, 1.4, 2.2);
       }
       controls.update();
+      hasInitialized.current = true;
     }
   }, [controlsRef, isLocked]);
 
@@ -210,7 +214,6 @@ export function CameraStudioController({ isOrbitDisabled, minPolar, maxPolar, ma
 
     const handleCameraChange = () => {
       const target = controls.target;
-      // Keep your existing boundary clamp coordinates intact...
       const maxPanX = 3.5;
       const minPanY = 0.2;
       const maxPanY = 5.5;
@@ -235,7 +238,7 @@ export function CameraStudioController({ isOrbitDisabled, minPolar, maxPolar, ma
     <OrbitControls
       ref={controlsRef as React.RefObject<OrbitControlsImpl>}
       enabled={!isOrbitDisabled}
-      enablePan={!isLocked} // Ensure users can't shift their position away from our standpoint
+      enablePan={!isLocked}
       enableZoom={true}
       enableDamping
       dampingFactor={0.04}
