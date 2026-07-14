@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { AlertProvider } from "@/context/AlertContext"; // Your active global toast alert banner component
 import { TrafficTracker } from "@/components/analytics/TrafficTracker";
+import { useEffect } from "react";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
     default: "PaintIt // Interactive 3D Room Studio & Color Customizer",
     template: "%s | PaintIt Studio",
   },
+  manifest: "/manifest.json",
   description: "See your colors before the first brush stroke. The premium architectural visualization tool designed for modern interior designers, decorators, and painters to close bids faster.",
   keywords: [
     "3D interior visualization",
@@ -75,11 +77,23 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  useEffect(() => {
+    if ('serviceWorker' in navigator && window.location.protocol === 'https:' || window.location.hostname === 'localhost') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((reg) => console.log('🛡️ PaintIt Service Worker Online:', reg.scope))
+          .catch((err) => console.warn('❌ Service Worker Registration Aborted:', err));
+      });
+    }
+  }, []);
+
   return (
     <html
       lang="en"
