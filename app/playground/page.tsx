@@ -131,19 +131,14 @@ export default function DedicatedPlayground() {
     const currentCameraPosition = controlsRef.current.object.position.toArray();
     const currentCameraTarget = controlsRef.current.target.toArray();
 
-    // 🔑 1. DIRECTLY INTERCEPT ACCESSTOKEN FROM AUTHCONTEXT TYPES
-    // Uses your exact context variable name, falling back safely to your specific storage keys[cite: 6]
     const token = accessToken
       || localStorage.getItem('paintit_access_token')
-      || localStorage.getItem('accessToken')
-      || localStorage.getItem('token')
       || '';
 
     if (!token) {
       showToast({
-        message: '⚠️ Session Expired or Token Missing: Please open your primary login page, re-authenticate your profile, and try again.',
-        severity: 'error',
-        duration: 5000
+        message: '⚠️ Session Expired: Please re-authenticate your profile.',
+        severity: 'error'
       });
       return;
     }
@@ -151,6 +146,7 @@ export default function DedicatedPlayground() {
     const schemaPayload = {
       id: designId,
       title: designTitle,
+      model_url: "/models/selfcon.glb", // 🎯 EXPLICITLY TRACK PATH FOR NEW ID ROW COMMITS
       camera_settings: {
         position: currentCameraPosition,
         target: currentCameraTarget,
@@ -173,29 +169,23 @@ export default function DedicatedPlayground() {
         body: JSON.stringify(schemaPayload)
       });
 
-      const responseText = await response.text();
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch {
-        responseData = { error: responseText };
-      }
+      const responseData = await response.json();
 
-      if (response.ok && (responseData.success || !responseData.error)) {
+      if (response.ok && responseData.success) {
         showToast({
-          message: `🚀 "${designTitle}" configurations synchronized successfully to your database row records!`,
+          message: `🚀 "${designTitle}" synchronized successfully to database row records!`,
           severity: 'success'
         });
       } else {
         showToast({
-          message: `❌ Sync Rejected (${response.status}): ${responseData.error || 'The security engine dropped this transaction.'}`,
+          message: `❌ Sync Rejected: ${responseData.error || 'The server rejected this record.'}`,
           severity: 'error'
         });
       }
     } catch (err) {
       console.error(err);
       showToast({
-        message: '💾 Connection Error: Backend server appears offline. Check terminal console output tabs.',
+        message: '💾 Connection Error: Check your backend service instance parameters.',
         severity: 'error'
       });
     }
