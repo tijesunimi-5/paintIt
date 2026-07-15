@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, Suspense, useRef, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Canvas } from '@react-three/fiber';
 import { useControls, Leva } from 'leva';
 import {
@@ -19,11 +19,19 @@ import { useAuth } from "@/context/AuthContext";
 
 type WorkspaceLightInstance = DynamicLightInstance & { visible?: boolean };
 
+type MasterTemplateCatalogItem = {
+  id: string;
+  title?: string;
+  plan_type?: string;
+  model_url?: string;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function DedicatedPlayground() {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const routeParams = useParams();
+  const searchParams = useSearchParams();
   const dynamicId = routeParams.id as string;
 
   const [activeSurface, setActiveSurface] = useState<string>('wallFront');
@@ -44,6 +52,11 @@ export default function DedicatedPlayground() {
 
   const [designId, setDesignId] = useState<string>(dynamicId);
   const [designTitle, setDesignTitle] = useState<string>('Loading Workspace Model...');
+  const [templateId, setTemplateId] = useState<string>(dynamicId);
+  const [modelUrl, setModelUrl] = useState<string>('/models/selfcon.glb');
+  const [isPremiumTemplate, setIsPremiumTemplate] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [activeDesignId, setActiveDesignId] = useState<string | null>(null);
 
   const { showToast } = useAlert();
   const { accessToken } = useAuth();
@@ -140,6 +153,88 @@ export default function DedicatedPlayground() {
     hydrateStudioEnvironment();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dynamicId]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const urlDesignId = searchParams?.get("id") || null;
+    const urlTemplateId = searchParams?.get("template") || "tmpl_living_lux";
+
+    const syncStudioContext = async () => {
+      try {
+        let activeRoomColors = { ...roomColors };
+        let resolvedTemplateId = urlTemplateId;
+        let dbDesignTitle = "";
+
+        // 1. If we are editing an already saved visualization ID:
+        if (urlDesignId) {
+          if (isMounted) setActiveDesignId(urlDesignId);
+
+          const res = await fetch(`${API_BASE_URL}/api/visualizations/${urlDesignId}`, {
+            method: "GET",
+            headers: accessToken ? { "Authorization": `Bearer ${accessToken}` } : undefined
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+
+            // Log this so you can inspect your backend table structure in the browser console!
+            console.log("📥 Loaded Mockup Data:", data);
+
+            if (data.visualization) {
+              dbDesignTitle = data.visualization.name;
+              if (data.visualization.room_data) {
+                activeRoomColors = data.visualization.room_data;
+              }
+
+              // 🔍 Multi-case fallback checks to match any database schema variation
+              resolvedTemplateId =
+                data.visualization.masterDesignId ||
+                data.visualization.master_design_id ||
+                data.visualization.parent_template_id ||
+                urlTemplateId;
+            }
+          }
+        }
+
+        // 2. Resolve the visual catalog for Model URLs and Premium check attributes:
+        const catalogRes = await fetch(`${API_BASE_URL}/api/visualizations/catalog`);
+        let activeTitle = dbDesignTitle || "Custom Studio Layout";
+        let premiumFlag = false;
+
+        // Default fallback model path
+        let activeModelPath = "/models/model1.glb";
+
+        if (catalogRes.ok) {
+          const catData = await catalogRes.json();
+          const activeTemplate = (catData.catalog || []).find(
+            (item: MasterTemplateCatalogItem) => item.id === resolvedTemplateId
+          );
+          if (activeTemplate) {
+            if (!dbDesignTitle) activeTitle = activeTemplate.title;
+            premiumFlag = activeTemplate.plan_type !== "FREE";
+            if (activeTemplate.model_url && activeTemplate.model_url.trim() !== "") {
+              activeModelPath = activeTemplate.model_url;
+            }
+          }
+        }
+
+        if (isMounted) {
+          setTemplateId(resolvedTemplateId);
+          setDesignTitle(activeTitle);
+          setIsPremiumTemplate(premiumFlag);
+          setRoomColors(activeRoomColors);
+          setModelUrl(activeModelPath);
+        }
+      } catch (err) {
+        console.error("Failed loading configuration stream:", err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    syncStudioContext();
+    return () => { isMounted = false; };
+  }, [searchParams, accessToken]);
 
   const handleSaveToDatabase = async () => {
     if (!controlsRef.current) return;
