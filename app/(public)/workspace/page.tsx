@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Canvas } from "@react-three/fiber";
 import { useAuth } from "@/context/AuthContext";
@@ -31,17 +31,7 @@ export interface DBRawLight {
   distance?: number;
 }
 
-interface MasterTemplateCatalogItem {
-  id: string;
-  title: string;
-  model_url: string;
-  plan_type: string;
-  camera_settings?: DBCameraConfig;
-  lighting_settings?: BulbState[];
-  default_room_data?: Record<string, string>;
-}
-
-export default function WorkspacePage() {
+function WorkspaceContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { accessToken } = useAuth();
@@ -82,10 +72,8 @@ export default function WorkspacePage() {
     toilet: "#C4B199"
   });
 
-  // Lights/Bulbs list dynamically loaded straight from the DB
   const [bulbs, setBulbs] = useState<BulbState[]>([]);
 
-  // Camera settings dynamically loaded straight from DB
   const [cameraConfig, setCameraConfig] = useState<DBCameraConfig>({
     position: [-2.73, 3.28, -2.51],
     target: [-1.94, 2.7, 0.05],
@@ -114,7 +102,7 @@ export default function WorkspacePage() {
         let resolvedModelPath = "/models/selfcon.glb";
         let resolvedNightMode = false;
 
-        // 🚀 FETCH 1: Get complete template configurations (including deep lighting_settings)
+        // 🚀 FETCH 1: Get complete template configurations
         const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${resolvedTemplateId}`).catch(() => null);
 
         if (templateRes && templateRes.ok) {
@@ -177,7 +165,7 @@ export default function WorkspacePage() {
                 const env = visData.visualization.global_environment || visData.visualization.globalEnvironment;
                 resolvedNightMode = env.isNightMode ?? resolvedNightMode;
               }
-              resolvedTemplateId = visData.visualization.masterDesignId || visData.visualization.parent_template_id || urlTemplateId;
+              resolvedTemplateId = visData.visualization.master_design_id || visData.visualization.masterDesignId || visData.visualization.parent_template_id || urlTemplateId;
             }
           }
         }
@@ -188,7 +176,7 @@ export default function WorkspacePage() {
           setCameraConfig(activeCamera);
           setTemplateId(resolvedTemplateId);
           setDesignTitle(loadedTitle);
-          setSaveName(loadedTitle); // Sync save state
+          setSaveName(loadedTitle);
           setModelUrl(resolvedModelPath);
           setIsNightMode(resolvedNightMode);
         }
@@ -203,7 +191,6 @@ export default function WorkspacePage() {
     return () => { isMounted = false; };
   }, [urlDesignId, urlTemplateId, accessToken, BACKEND_API_URL]);
 
-  // Drag Resizing Logic
   const startDrag = () => {
     isDragging.current = true;
     document.addEventListener("mousemove", onDrag);
@@ -237,67 +224,9 @@ export default function WorkspacePage() {
   };
 
   const triggerSaveModal = () => {
-    setSaveName(designTitle); // Pre-fill input with the current active header name
+    setSaveName(designTitle);
     setSaveModalOpen(true);
   };
-
-  // const handleSaveWorkspace = async (e?: React.FormEvent) => {
-  //   if (e) e.preventDefault();
-
-  //   if (!saveName.trim()) {
-  //     showToast({ message: "Please enter a valid save name.", severity: "error" });
-  //     return;
-  //   }
-
-  //   const activeToken = accessToken || localStorage.getItem("paintit_access_token");
-  //   if (!activeToken) {
-  //     showToast({ message: "Session expired. Please log in again.", severity: "error" });
-  //     return;
-  //   }
-
-  //   setIsSaving(true);
-
-  //   try {
-  //     const saveBody = {
-  //       id: urlDesignId,
-  //       name: saveName.trim(), // Saves using your freshly typed input string
-  //       roomData: roomColors,
-  //       room_data: roomColors,
-  //       lightData: bulbs,
-  //       light_data: bulbs,
-  //       cameraData: cameraConfig,
-  //       camera_data: cameraConfig,
-  //       masterDesignId: templateId,
-  //       master_design_id: templateId,
-  //       parent_template_id: templateId,
-  //       globalEnvironment: { isNightMode },
-  //       global_environment: { isNightMode }
-  //     };
-
-  //     const res = await fetch(`${BACKEND_API_URL}/api/visualizations`, {
-  //       method: "POST",
-  //       headers: {
-  //         "Authorization": `Bearer ${activeToken}`,
-  //         "Content-Type": "application/json"
-  //       },
-  //       body: JSON.stringify(saveBody)
-  //     });
-
-  //     if (res.ok) {
-  //       showToast({ message: "Design synced successfully!", severity: "success" });
-  //       setDesignTitle(saveName.trim());
-  //       setSaveModalOpen(false);
-  //       router.push("/designs");
-  //     } else {
-  //       showToast({ message: "Error synchronizing configuration.", severity: "error" });
-  //     }
-  //   } catch (err) {
-  //     console.error(err);
-  //     showToast({ message: "Network connection failure.", severity: "error" });
-  //   } finally {
-  //     setIsSaving(false);
-  //   }
-  // };
 
   const handleSaveWorkspace = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -327,11 +256,9 @@ export default function WorkspacePage() {
         camera_data: cameraConfig,
         globalEnvironment: { isNightMode },
         global_environment: { isNightMode },
-
-        // 🎯 THE CRITICAL SYNC FIX: Explicitly bind the parent catalog key to both cases
-        masterDesignId: templateId,     // For camelCase backend parsers
-        master_design_id: templateId,    // For direct snake_case database mapping
-        parent_template_id: templateId   // Multi-case fallback tracing
+        masterDesignId: templateId,
+        master_design_id: templateId,
+        parent_template_id: templateId
       };
 
       const res = await fetch(`${BACKEND_API_URL}/api/visualizations`, {
@@ -370,8 +297,6 @@ export default function WorkspacePage() {
 
   return (
     <div className="fixed inset-0 bg-neutral-950 flex flex-col overflow-hidden text-white font-sans">
-
-      {/* 📱 NAVIGATION HUD HEADER */}
       <header className="w-full bg-neutral-950/85 border-b border-neutral-900 px-4 py-3 flex items-center justify-between z-30 backdrop-blur-md">
         <div className="flex flex-col">
           <span className="text-xs font-black uppercase tracking-wide text-white truncate max-w-37.5">
@@ -383,12 +308,11 @@ export default function WorkspacePage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => router.push("/designs")}
+            onClick={() => router.push("/dashboard/designs")}
             className="px-3 py-1.5 bg-neutral-900 text-[10px] font-black uppercase tracking-wider rounded-xl text-neutral-400 border border-neutral-850"
           >
             Exit
           </button>
-
           <button
             onClick={triggerSaveModal}
             className="hidden md:inline-block px-4 py-1.5 bg-emerald-500 text-neutral-950 text-[10px] font-black uppercase tracking-wider rounded-xl shadow-lg"
@@ -398,7 +322,6 @@ export default function WorkspacePage() {
         </div>
       </header>
 
-      {/* 🖼️ DYNAMIC THREE.JS VIEWPORT CANVAS */}
       <section className="flex-1 w-full h-full relative z-10">
         <Canvas camera={{ position: cameraConfig.position || [-2.73, 3.28, -2.51], fov: 65 }}>
           <WorkspaceCanvas
@@ -414,7 +337,6 @@ export default function WorkspacePage() {
         </Canvas>
       </section>
 
-      {/* 🎛/💾 FLOATING ACTION TOOLBAR */}
       <div className="absolute right-4 bottom-75 z-20 flex flex-col gap-2">
         <button
           onClick={triggerSaveModal}
@@ -426,8 +348,8 @@ export default function WorkspacePage() {
         <button
           onClick={() => handleTabFABClick("paint")}
           className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "paint" && !isPanelCollapsed
-              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-              : "bg-neutral-900/90 border-neutral-800 text-white"
+            ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+            : "bg-neutral-900/90 border-neutral-800 text-white"
             }`}
           title="Paint Picker"
         >
@@ -436,8 +358,8 @@ export default function WorkspacePage() {
         <button
           onClick={() => handleTabFABClick("lighting")}
           className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "lighting" && !isPanelCollapsed
-              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-              : "bg-neutral-900/90 border-neutral-800 text-white"
+            ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+            : "bg-neutral-900/90 border-neutral-800 text-white"
             }`}
           title="Bulb Switches"
         >
@@ -451,7 +373,6 @@ export default function WorkspacePage() {
         </button>
       </div>
 
-      {/* ⚙️ RESIZABLE BOTTOM SHEET PANEL */}
       <div
         style={{ height: isPanelCollapsed ? 0 : `${panelHeight}px` }}
         className="absolute bottom-0 left-0 right-0 bg-neutral-950/95 border-t border-neutral-900 z-20 shadow-2xl overflow-hidden transition-all duration-300 ease-out flex flex-col backdrop-blur-lg"
@@ -485,7 +406,6 @@ export default function WorkspacePage() {
         </div>
       </div>
 
-      {/* 💾 INTERACTIVE POPUP SAVE MODAL */}
       {saveModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-md">
           <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 p-6 rounded-2xl shadow-2xl space-y-4 animate-fade-in">
@@ -533,7 +453,24 @@ export default function WorkspacePage() {
           </div>
         </div>
       )}
-
     </div>
+  );
+}
+
+// 🚀 Export the page wrapped inside a dynamic suspense shell to bypass bailing static site checks during deployment
+export default function WorkspacePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="fixed inset-0 bg-neutral-950 flex flex-col items-center justify-center gap-3 z-50">
+          <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-[10px] tracking-widest text-neutral-500 uppercase font-black">
+            Mounting Spatial Parameters...
+          </span>
+        </div>
+      }
+    >
+      <WorkspaceContent />
+    </Suspense>
   );
 }
