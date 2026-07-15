@@ -1,17 +1,23 @@
-// app/(public)/view/[id]/page.tsx
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import Image from "next/image";
+import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useAuth } from "@/context/AuthContext";
 import { useAlert } from "@/context/AlertContext";
 
+// Modular Dashboard Components
+import PaintPicker, { CustomColor } from "@/components/canvas/ClientPaintPicker";
+import LightControls, { BulbState } from "@/components/canvas/LightControls";
+import { DBRawLight } from "../../workspace/page";
+
 interface SharedDataPayload {
   share_id: string;
-  design_id?: string; // Track original design ID for workspace canvas routing
+  design_id?: string;
   design_name: string;
   room_data: Record<string, string>;
   parent_template_name: string;
@@ -25,16 +31,7 @@ interface SharedDataPayload {
   phone_number: string | null;
   model_url?: string | null;
   master_design_id?: string;
-}
-
-interface PortfolioProject {
-  id: string;
-  title: string;
-  description: string | null;
-  images: string[];
-  location: string;
-  colors_used: string[];
-  created_at: string;
+  lighting_settings?: DBRawLight[];
 }
 
 interface Painter3DConcept {
@@ -45,56 +42,112 @@ interface Painter3DConcept {
   created_at: string;
 }
 
-function ReadOnlyRoomPlanes({ roomColors }: { roomColors: Record<string, string> }) {
-  const width = 14;
-  const height = 8;
-  const depth = 14;
-
-  return (
-    <group>
-      <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[width, depth]} />
-        <meshStandardMaterial color={roomColors.floor || "#161618"} roughness={0.7} metalness={0.1} />
-      </mesh>
-      <mesh position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[width, depth]} />
-        <meshStandardMaterial color={roomColors.ceiling || "#1a1a1c"} roughness={0.9} />
-      </mesh>
-      <mesh position={[0, height / 2, -depth / 2]} rotation={[0, 0, 0]}>
-        <planeGeometry args={[width, height]} />
-        <meshStandardMaterial color={roomColors.wallBack || "#F2EFE9"} roughness={0.85} />
-      </mesh>
-      <group position={[-width / 2, height / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <mesh>
-          <planeGeometry args={[depth, height]} />
-          <meshStandardMaterial color={roomColors.wallLeft || "#9BA498"} roughness={0.85} />
-        </mesh>
-      </group>
-      <group position={[width / 2, height / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
-        <mesh>
-          <planeGeometry args={[depth, height]} />
-          <meshStandardMaterial color={roomColors.wallRight || "#C4B199"} roughness={0.85} />
-        </mesh>
-      </group>
-    </group>
-  );
+interface DBCameraConfig {
+  position?: [number, number, number];
+  target?: [number, number, number];
+  floorLimitAngle?: number;
+  ceilingLimitAngle?: number;
+  maxZoomDistance?: number;
 }
 
-function PublicCustomBlenderModelMesh({ modelUrl, surfaceStates }: { modelUrl: string; surfaceStates: Record<string, string> }) {
+interface AuthUserPayload {
+  id: string;
+  email: string;
+  full_name: string;
+  role?: string;
+}
+
+const ClientPaintPicker = PaintPicker as React.ComponentType<
+  React.ComponentProps<typeof PaintPicker> & { isReadOnly?: boolean }
+>;
+
+// 📦 DYNAMIC CLIENT INTERACTIVE CANVAS ENGINE
+function ClientInteractiveCanvas({
+  modelUrl,
+  roomColors,
+  onSurfaceSelect,
+  bulbs,
+  cameraConfig,
+  isNightMode
+}: {
+  modelUrl: string;
+  roomColors: Record<string, string>;
+  onSurfaceSelect: (meshName: string) => void;
+  bulbs: BulbState[];
+  cameraConfig: DBCameraConfig;
+  isNightMode: boolean;
+}) {
   const { scene } = useGLTF(modelUrl);
+  const controlsRef = useRef<OrbitControlsImpl>(null);
+
+  useEffect(() => {
+    if (controlsRef.current && cameraConfig) {
+      if (cameraConfig.target) controlsRef.current.target.set(...cameraConfig.target);
+      if (cameraConfig.position) controlsRef.current.object.position.set(...cameraConfig.position);
+      controlsRef.current.update();
+    }
+  }, [cameraConfig]);
 
   useEffect(() => {
     scene.traverse((node: THREE.Object3D) => {
       if (node instanceof THREE.Mesh && node.material instanceof THREE.MeshStandardMaterial) {
-        const meshName = node.name || node.uuid;
-        if (surfaceStates[meshName]) {
-          node.material.color.set(surfaceStates[meshName]);
+        node.castShadow = true;
+        node.receiveShadow = true;
+        if (roomColors[node.name]) {
+          node.material.color.set(roomColors[node.name]);
         }
+        node.material.needsUpdate = true;
       }
     });
-  }, [scene, surfaceStates]);
+  }, [scene, roomColors]);
 
-  return <primitive object={scene} />;
+  return (
+    <>
+      <color attach="background" args={[isNightMode ? "#040406" : "#d1d5db"]} />
+
+      <ambientLight intensity={isNightMode ? 0.02 : 0.4} color={isNightMode ? "#0a0f1d" : "#ffffff"} />
+      {!isNightMode && <directionalLight position={[4, 8, 4]} intensity={0.6} color="#ffffff" castShadow />}
+
+      {bulbs.map((bulb) => {
+        const isLightOn = bulb.visible !== undefined ? bulb.visible : bulb.enabled;
+        if (!isLightOn) return null;
+
+        return (
+          <group key={bulb.id} position={bulb.position}>
+            <pointLight
+              intensity={bulb.intensity}
+              color={bulb.color}
+              distance={bulb.distance || 15}
+              decay={1.2}
+              castShadow
+            />
+          </group>
+        );
+      })}
+
+      <primitive
+        object={scene}
+        onClick={(e: ThreeEvent<MouseEvent>) => {
+          e.stopPropagation();
+          if (e.object instanceof THREE.Mesh) {
+            onSurfaceSelect(e.object.name || e.object.uuid);
+          }
+        }}
+      />
+
+      <OrbitControls
+        ref={controlsRef}
+        enableZoom={true}
+        enablePan={false}
+        enableDamping
+        dampingFactor={0.05}
+        minDistance={0.1}
+        maxDistance={1.8}
+        minPolarAngle={0.1}
+        maxPolarAngle={Math.PI / 2.05}
+      />
+    </>
+  );
 }
 
 export default function PublicProfileAndConceptPage() {
@@ -103,24 +156,68 @@ export default function PublicProfileAndConceptPage() {
   const { accessToken, user } = useAuth();
   const { showToast } = useAlert();
 
-  const targetId = (params?.id || params?.sharedId) as string;
+  const targetId = (params?.sharedId || params?.id) as string;
 
+  // View UI Panels Configurations
+  const [activeTab, setActiveTab] = useState<"paint" | "lighting">("paint");
+  const [activeSurface, setActiveSurface] = useState<string>("wallFront");
+  const [panelHeight, setPanelHeight] = useState<number>(280);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false);
+  const isDragging = useRef<boolean>(false);
+
+  // Send Feedback Workflow Panel Matrix
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState<boolean>(false);
+  const [clientMessage, setClientMessage] = useState<string>("");
+  const [sendingFeedback, setSendingFeedback] = useState<boolean>(false);
+
+  // Shared Core Matrices
   const [is3DConceptShare, setIs3DConceptShare] = useState<boolean>(false);
   const [sharedConcept, setSharedConcept] = useState<SharedDataPayload | null>(null);
+  const [roomColors, setRoomColors] = useState<Record<string, string>>({});
+  const [bulbs, setBulbs] = useState<BulbState[]>([]);
+  const [isNightMode, setIsNightMode] = useState<boolean>(false);
+  const [cameraConfig, setCameraConfig] = useState<DBCameraConfig>({
+    position: [-2.73, 3.28, -2.51],
+    target: [-1.94, 2.7, 0.05]
+  });
 
   const [profile, setProfile] = useState<SharedDataPayload | null>(null);
-  const [portfolio, setPortfolio] = useState<PortfolioProject[]>([]);
-  // ✅ NEW: State array storing the painter's interactive 3D concept list
   const [concepts3D, setConcepts3D] = useState<Painter3DConcept[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [importing, setImporting] = useState<boolean>(false);
+  const [customColors, setCustomColors] = useState<CustomColor[]>([]);
 
-  // Expansion Gallery Lightbox States
-  const [activeLightboxProject, setActiveLightboxProject] = useState<PortfolioProject | null>(null);
-  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [importing, setImporting] = useState<boolean>(false);
 
   const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
+  const startDrag = () => {
+    isDragging.current = true;
+    document.addEventListener("mousemove", onDrag);
+    document.addEventListener("mouseup", stopDrag);
+    document.addEventListener("touchmove", onDrag);
+    document.addEventListener("touchend", stopDrag);
+  };
+
+  const onDrag = (e: MouseEvent | TouchEvent) => {
+    if (!isDragging.current) return;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    const calculatedHeight = window.innerHeight - clientY;
+
+    if (calculatedHeight > 140 && calculatedHeight < window.innerHeight * 0.85) {
+      setPanelHeight(calculatedHeight);
+      setIsPanelCollapsed(false);
+    }
+  };
+
+  const stopDrag = () => {
+    isDragging.current = false;
+    document.removeEventListener("mousemove", onDrag);
+    document.removeEventListener("mouseup", stopDrag);
+    document.removeEventListener("touchmove", onDrag);
+    document.removeEventListener("touchend", stopDrag);
+  };
+
+  // 🎯 PIPELINE CORRECTLY ALIGNED INSIDE MAIN PROFILE COMPONENT SCOPE
   useEffect(() => {
     if (!targetId) return;
 
@@ -130,29 +227,46 @@ export default function PublicProfileAndConceptPage() {
 
         if (conceptRes.ok) {
           const conceptBody = await conceptRes.json();
-          setSharedConcept(conceptBody.data);
+          const conceptData = conceptBody.data as SharedDataPayload;
+          setSharedConcept(conceptData);
+          setRoomColors(conceptData.room_data || {});
           setIs3DConceptShare(true);
-          setLoading(false);
+
+          // Fallback safely to 'tmpl_hostel_lux' if master_design_id is null or missing from the DB record
+          const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
+
+          const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`);
+          if (templateRes.ok) {
+            const templateData = await templateRes.json();
+
+            // Hydrate the baseline lights configuration from the catalog template matrix
+            if (templateData.lighting_settings) {
+              setBulbs(
+                templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+                  ...light,
+                  name: `Bulb #${index + 1}`,
+                  enabled: light.visible !== undefined ? light.visible : true,
+                  visible: light.visible !== undefined ? light.visible : true
+                }))
+              );
+            }
+            if (templateData.camera_settings) {
+              setCameraConfig(templateData.camera_settings);
+            }
+          }
+          setIsLoading(false);
           return;
         }
 
-        // Fetch profile, project images portfolio, and interactive 3D concepts for the specific painter ID[cite: 4]
-        const [profileRes, portfolioRes, conceptsRes] = await Promise.all([
+        const [profileRes, conceptsRes] = await Promise.all([
           fetch(`${BACKEND_API_URL}/api/profile/${targetId}`),
-          fetch(`${BACKEND_API_URL}/api/portfolio/projects?userId=${targetId}`),
-          fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`) // Backend route helper mapping
+          fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`)
         ]);
 
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           setProfile(profileData.profile || null);
         }
-
-        if (portfolioRes.ok) {
-          const portfolioData = await portfolioRes.json();
-          setPortfolio(portfolioData.projects || []);
-        }
-
         if (conceptsRes.ok) {
           const conceptsData = await conceptsRes.json();
           setConcepts3D(conceptsData.visualizations || []);
@@ -160,7 +274,7 @@ export default function PublicProfileAndConceptPage() {
       } catch (err) {
         console.error("Aggregation error on public stream:", err);
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
@@ -191,36 +305,63 @@ export default function PublicProfileAndConceptPage() {
         },
         body: JSON.stringify({
           name: `${sharedConcept.design_name} (Remixed)`,
-          roomData: sharedConcept.room_data,
+          roomData: roomColors,
+          room_data: roomColors,
+          light_data: bulbs,
+          camera_data: cameraConfig,
           masterDesignId: sharedConcept.master_design_id || "tmpl_living_lux"
         })
       });
 
       if (response.ok) {
         showToast({ message: "Design cloned perfectly! Redirecting to your Hub layout...", severity: "success" });
-        setTimeout(() => {
-          router.push("/hub");
-        }, 1500);
-      } else {
-        const errData = await response.json();
-        throw new Error(errData.message || "Failed to clone setup.");
+        setTimeout(() => { router.push("/hub"); }, 1500);
       }
     } catch (err) {
-      console.error("Cloning pipeline exception caught:", err);
+      console.error(err);
       showToast({ message: "Could not import design asset parameters.", severity: "error" });
     } finally {
       setImporting(false);
     }
   };
 
-  const handleOpenLightbox = (project: PortfolioProject) => {
-    if (project.images && project.images.length > 0) {
-      setActiveLightboxProject(project);
-      setCurrentImageIndex(0);
+  const handleSendFeedbackToPainter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientMessage.trim()) return;
+
+    setSendingFeedback(true);
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/api/visualizations/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { "Authorization": `Bearer ${accessToken}` } : {})
+        },
+        body: JSON.stringify({
+          shareId: targetId,
+          roomData: roomColors,
+          lightData: bulbs,
+          message: clientMessage.trim(),
+          clientName: user ? (user as AuthUserPayload).full_name : "Anonymous Client"
+        })
+      });
+
+      if (response.ok) {
+        showToast({ message: "🚀 Revisions and colors submitted straight to painter's panel!", severity: "success" });
+        setFeedbackModalOpen(false);
+        setClientMessage("");
+      } else {
+        showToast({ message: "Failed routing review log parameters.", severity: "error" });
+      }
+    } catch (err) {
+      console.error(err);
+      showToast({ message: "Network connection timeout.", severity: "error" });
+    } finally {
+      setSendingFeedback(false);
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-[60vh] w-full flex flex-col items-center justify-center gap-3">
         <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -231,315 +372,205 @@ export default function PublicProfileAndConceptPage() {
     );
   }
 
-  // 📺 1. RENDER INTERACTIVE FULLSCREEN 3D SCHEME VIEW FOR SINGLE SHARE LINKS[cite: 4]
   if (is3DConceptShare && sharedConcept) {
-    const whatsappLinkText = encodeURIComponent(
-      `Hello ${sharedConcept.full_name}, I just reviewed the 3D room color setup titled "${sharedConcept.design_name}" you shared with me. I love it! Let's lock down the contract details.`
-    );
-
     return (
-      <div className="fixed inset-0 bg-neutral-950 flex flex-col overflow-hidden select-none z-40 text-white">
+      <div className="fixed inset-0 bg-neutral-950 flex flex-col overflow-hidden select-none z-40 text-white font-sans">
+
+        {/* Navigation HUD */}
         <div className="w-full bg-neutral-950 border-b border-neutral-900 px-4 py-3 z-20 flex items-center justify-between">
           <div>
             <h1 className="text-xs font-black uppercase tracking-wider text-neutral-100">{sharedConcept.design_name}</h1>
             <p className="text-[9px] text-neutral-500 uppercase tracking-widest mt-0.5">
-              Designed by: <span className="text-emerald-400 font-bold">{sharedConcept.full_name}</span>
+              Painter: <span className="text-emerald-400 font-bold">{sharedConcept.full_name}</span>
             </p>
           </div>
-          <span className="text-[9px] bg-neutral-900 border border-neutral-850 px-2.5 py-1 rounded-md text-neutral-400 font-bold uppercase select-none">
-            Client Interactive Preview
-          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFeedbackModalOpen(true)}
+              className="px-3.5 py-1.5 bg-cyan-600 text-white text-[10px] font-black uppercase tracking-wider rounded-xl shadow-lg"
+            >
+              Send to Painter ✉️
+            </button>
+            <button
+              onClick={handleSaveToClientHub}
+              disabled={importing}
+              className="px-3.5 py-1.5 bg-emerald-500 text-neutral-950 text-[10px] font-black uppercase tracking-wider rounded-xl shadow-lg"
+            >
+              {importing ? "Importing..." : "Save to Hub"}
+            </button>
+          </div>
         </div>
 
+        {/* 3D Viewport View */}
         <div className="flex-1 w-full h-full relative z-10">
-          <Canvas camera={{ position: [12, 12, 12], fov: 45 }}>
-            <color attach="background" args={["#0a0a0a"]} />
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[5, 15, 5]} intensity={0.8} />
+          <Canvas camera={{ position: cameraConfig.position || [-2.73, 3.28, -2.51], fov: 65 }}>
             <Suspense fallback={null}>
-              {sharedConcept.model_url && sharedConcept.model_url.trim() !== "" ? (
-                <PublicCustomBlenderModelMesh
-                  modelUrl={sharedConcept.model_url}
-                  surfaceStates={sharedConcept.room_data}
-                />
-              ) : (
-                <ReadOnlyRoomPlanes roomColors={sharedConcept.room_data} />
-              )}
+              <ClientInteractiveCanvas
+                modelUrl={sharedConcept.model_url || "/models/selfcon.glb"}
+                roomColors={roomColors}
+                onSurfaceSelect={setActiveSurface}
+                bulbs={bulbs}
+                cameraConfig={cameraConfig}
+                isNightMode={isNightMode}
+              />
             </Suspense>
-            <OrbitControls maxDistance={22} minDistance={4} enablePan={false} />
           </Canvas>
         </div>
 
-        <div className="absolute bottom-4 left-0 right-0 z-20 px-4 flex justify-center pointer-events-none">
-          <div className="w-full max-w-xl bg-neutral-900/90 border border-neutral-800 p-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pointer-events-auto backdrop-blur-md">
-            <div>
-              <h4 className="text-xs font-black uppercase text-neutral-200">Approve This Look?</h4>
-              <p className="text-[10px] text-neutral-500 mt-0.5 leading-relaxed">Save it to your Design Hub to start custom remix variants, or chat directly.</p>
-            </div>
+        {/* Floating Controls */}
+        <div className="absolute right-4 bottom-75 z-20 flex flex-col gap-2">
+          <button
+            onClick={() => { setActiveTab("paint"); setIsPanelCollapsed(false); }}
+            className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "paint" && !isPanelCollapsed
+              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+              : "bg-neutral-900/90 border-neutral-800 text-white"
+              }`}
+          >
+            🎨
+          </button>
+          <button
+            onClick={() => { setActiveTab("lighting"); setIsPanelCollapsed(false); }}
+            className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "lighting" && !isPanelCollapsed
+              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+              : "bg-neutral-900/90 border-neutral-800 text-white"
+              }`}
+          >
+            💡
+          </button>
+          <button
+            onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
+            className="w-10 h-10 rounded-full bg-neutral-950/90 border border-neutral-850 text-neutral-400 flex items-center justify-center shadow-2xl font-bold"
+          >
+            {isPanelCollapsed ? "▲" : "▼"}
+          </button>
+        </div>
 
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                disabled={importing}
-                onClick={handleSaveToClientHub}
-                className="px-4 py-2.5 bg-neutral-950 border border-neutral-800 text-neutral-200 hover:text-emerald-400 text-center text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
-              >
-                {importing ? "Importing Design..." : "📥 Save to My Hub"}
-              </button>
+        {/* Resizable Bottom Sheet Panel */}
+        <div
+          style={{ height: isPanelCollapsed ? 0 : `${panelHeight}px` }}
+          className="absolute bottom-0 left-0 right-0 bg-neutral-950/95 border-t border-neutral-900 z-20 shadow-2xl overflow-hidden transition-all duration-300 ease-out flex flex-col backdrop-blur-lg"
+        >
+          <div
+            onMouseDown={startDrag}
+            onTouchStart={startDrag}
+            className="w-full h-5 flex items-center justify-center cursor-ns-resize hover:bg-neutral-900/50 shrink-0"
+          >
+            <div className="w-12 h-1 bg-neutral-800 rounded-full" />
+          </div>
 
-              {sharedConcept.phone_number ? (
-                <a
-                  href={`https://wa.me/${sharedConcept.phone_number.replace(/\s+/g, "")}?text=${whatsappLinkText}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black text-center text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md block"
-                >
-                  💬 Chat with Painter
-                </a>
-              ) : (
-                <span className="text-[9px] text-neutral-600 italic flex items-center justify-center">No phone contact details linked</span>
-              )}
-            </div>
+          <div className="flex-1 overflow-y-auto px-4 pb-6">
+            {activeTab === "paint" && (
+              <ClientPaintPicker
+                activeSurface={activeSurface}
+                roomColors={roomColors}
+                setRoomColors={setRoomColors}
+                customColors={customColors}
+                setCustomColors={setCustomColors}
+                isReadOnly={true}
+              />
+            )}
+            {activeTab === "lighting" && (
+              <LightControls
+                bulbs={bulbs}
+                setBulbs={setBulbs}
+                isNightMode={isNightMode}
+                setIsNightMode={setIsNightMode}
+              />
+            )}
           </div>
         </div>
+
+        {/* ✉️ INTERACTIVE CLIENT REVIEW FEEDBACK MODAL */}
+        {feedbackModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-md">
+            <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 p-6 rounded-2xl shadow-2xl space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-black uppercase tracking-wider text-neutral-100">Submit Adjustments to Painter</h3>
+                <p className="text-[11px] text-neutral-400">Your currently selected room configuration preset colors and bulb settings will be attached safely to this message log stream.</p>
+              </div>
+
+              <form onSubmit={handleSendFeedbackToPainter} className="space-y-4">
+                <textarea
+                  required
+                  rows={4}
+                  placeholder="e.g. I swapped the front wall to Desert Sand and loved how it pops under day mode. Let's proceed with these changes!"
+                  value={clientMessage}
+                  onChange={(e) => setClientMessage(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 focus:border-cyan-500 rounded-xl p-3 text-xs text-white placeholder-neutral-600 focus:outline-none transition-all resize-none"
+                />
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={sendingFeedback}
+                    onClick={() => setFeedbackModalOpen(false)}
+                    className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-neutral-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={sendingFeedback}
+                    className="px-5 py-2.5 bg-cyan-600 disabled:bg-cyan-900 text-white text-[10px] font-black uppercase tracking-wider rounded-xl shadow-lg flex items-center gap-2"
+                  >
+                    {sendingFeedback ? "Dispatching..." : "Send Message & Colors ➔"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  // 📱 2. STANDARD PORTFOLIO CATALOG BACKUP FALLBACK VIEW[cite: 4]
   const activeProfile = profile || sharedConcept;
   if (!activeProfile) {
     return (
       <div className="text-center py-24 border border-dashed border-neutral-900 rounded-3xl max-w-md mx-auto">
         <span className="text-xl">⚠️</span>
         <h3 className="text-xs font-black uppercase text-neutral-400 mt-2">Profile Absent</h3>
-        <p className="text-[11px] text-neutral-600 mt-1">This contractor account profile record does not exist on the network cluster.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10 animate-fade-in text-white pb-12 selection:bg-emerald-500 selection:text-black">
-
-      {/* IDENTITY PROFILE HERO HEADER[cite: 4] */}
+    <div className="max-w-4xl mx-auto space-y-10 text-white pb-12">
+      {/* IDENTITY PROFILE HERO HEADER */}
       <div className="p-6 bg-neutral-950 border border-neutral-900 rounded-3xl space-y-4 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-2xl text-emerald-400 select-none shadow-inner overflow-hidden shrink-0">
-              {activeProfile.avatar_url ? (
-                <img
-                  src={activeProfile.avatar_url}
-                  alt={activeProfile.full_name}
-                  className="w-full h-full object-cover animate-fade-in"
-                />
-              ) : (
-                <span>{activeProfile.full_name.charAt(0).toUpperCase()}</span>
-              )}
-            </div>
-
-            <div>
-              <h1 className="text-xl font-black uppercase tracking-wide text-neutral-100">{activeProfile.full_name}</h1>
-              <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-neutral-500">
-                <span>📍 {activeProfile.location || "Location unconfigured"}</span>
-                {activeProfile.experience_years > 0 && (
-                  <>
-                    <span className="text-neutral-700">•</span>
-                    <span className="text-neutral-400 font-semibold">💼 {activeProfile.experience_years} Years Active Experience</span>
-                  </>
-                )}
-              </div>
-            </div>
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-2xl text-emerald-400 relative">
+            {activeProfile.avatar_url ? (
+              <Image src={activeProfile.avatar_url} alt="" fill sizes="64px" unoptimized className="object-cover" />
+            ) : (
+              <span>{activeProfile.full_name.charAt(0).toUpperCase()}</span>
+            )}
           </div>
-          <span className="text-[10px] bg-neutral-900 border border-neutral-850 px-3 py-1.5 rounded-xl text-emerald-400 font-black uppercase tracking-wider select-none h-fit">
-            Pro Contractor
-          </span>
+          <div>
+            <h1 className="text-xl font-black uppercase tracking-wide text-neutral-100">{activeProfile.full_name}</h1>
+            <p className="text-xs text-neutral-500">📍 {activeProfile.location || "Location unconfigured"}</p>
+          </div>
         </div>
-
-        {activeProfile.bio && (
-          <div className="pt-4 border-t border-neutral-900/60">
-            <h3 className="text-[10px] font-black uppercase tracking-wider text-neutral-600 mb-1">Studio Biography</h3>
-            <p className="text-xs text-neutral-400 leading-relaxed font-medium">{activeProfile.bio}</p>
-          </div>
-        )}
       </div>
 
-      {/* ✅ NEW: INTERACTIVE 3D CONCEPTS SHOWCASE DECK GRID */}
+      {/* 3D CONCEPTS */}
       <div className="space-y-4">
-        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-500 pl-1">Interactive 3D Color Presets</h3>
-
-        {concepts3D.length === 0 ? (
-          <div className="p-10 bg-neutral-950 border border-neutral-900 rounded-3xl text-center border-dashed flex flex-col items-center justify-center min-h-[140px] space-y-2">
-            <span className="text-xl opacity-40">🎨</span>
-            <h4 className="text-[11px] font-black uppercase tracking-wide text-neutral-400">No Interactive 3D Concepts</h4>
-            <p className="text-[10px] text-neutral-600 max-w-xs leading-relaxed">This painter hasn&apos;t published any custom 3D design models to load yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {concepts3D.map((concept) => (
-              <div
-                key={concept.id}
-                onClick={() => router.push(`/designs?templateId=${concept.id}&preview=true`)}
-                className="group bg-neutral-950 border border-neutral-900 hover:border-emerald-500/30 rounded-2xl p-5 flex flex-col justify-between cursor-pointer transition-all shadow-xl"
-              >
-                <div className="space-y-2">
-                  <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-850 flex items-center justify-center font-black text-emerald-400 text-lg shadow-inner group-hover:bg-emerald-500 group-hover:text-black transition-colors">
-                    📦
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black uppercase text-neutral-200 tracking-wide group-hover:text-emerald-400 transition-colors truncate">
-                      {concept.name}
-                    </h4>
-                    <p className="text-[10px] text-neutral-500 font-medium uppercase tracking-wider mt-0.5">
-                      Layout: {concept.parent_template_name || "Custom Room"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-neutral-900/40 flex items-center justify-between text-[9px] font-black text-neutral-500 group-hover:text-emerald-400 transition-colors uppercase tracking-wider">
-                  <span>Launch 3D Visualizer</span>
-                  <span>Interactive &rarr;</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* SPECIALTIES & APPLICATION BADGES[cite: 4] */}
-      {activeProfile.skills && activeProfile.skills.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-xs font-black uppercase tracking-wider text-neutral-500 pl-1">Finishes Specializations</h3>
-          <div className="flex flex-wrap gap-2">
-            {activeProfile.skills.map((skill, idx) => (
-              <span
-                key={idx}
-                className="px-3 py-1.5 bg-neutral-950 border border-neutral-900 text-neutral-300 font-bold text-[11px] rounded-xl cursor-default hover:border-emerald-500/20 transition-colors shadow-md"
-              >
-                ✨ {skill}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* HIGH-RESOLUTION PORTFOLIO GALLERY LAYER[cite: 4] */}
-      <div className="space-y-4">
-        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-500 pl-1">Real Finishes Showcase</h3>
-
-        {portfolio.length === 0 ? (
-          <div className="p-10 bg-neutral-950 border border-neutral-900 rounded-3xl text-center space-y-2 border-dashed flex flex-col items-center justify-center min-h-[160px]">
-            <span className="text-xl opacity-40">📸</span>
-            <h4 className="text-[11px] font-black uppercase tracking-wide text-neutral-400">No Showcase Projects Available</h4>
-            <p className="text-[10px] text-neutral-600 max-w-xs leading-relaxed">This contractor has not uploaded live finishes work imagery onto their gallery dashboard yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {portfolio.map((project) => (
-              <div
-                key={project.id}
-                className="group bg-neutral-950 border border-neutral-900 hover:border-neutral-800 rounded-2xl overflow-hidden flex flex-col justify-between shadow-xl transition-all duration-200"
-              >
-                <div>
-                  <div
-                    onClick={() => handleOpenLightbox(project)}
-                    className="relative w-full h-48 bg-neutral-900 border-b border-neutral-900 overflow-hidden cursor-pointer"
-                  >
-                    {project.images && project.images.length > 0 ? (
-                      <img src={project.images[0]} alt={project.title} className="w-full h-full object-cover group-hover:scale-[101%] transition-transform duration-300" />
-                    ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center text-neutral-700 bg-neutral-950">
-                        <span className="text-xl mb-1">🖼️</span>
-                        <span className="text-[9px] uppercase font-bold tracking-wider">No Media Logs</span>
-                      </div>
-                    )}
-
-                    <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/70 backdrop-blur-md border border-neutral-800/60 rounded-full text-[10px] font-bold tracking-wide text-neutral-300 select-none">
-                      📍 {project.location}
-                    </div>
-
-                    {project.images && project.images.length > 1 && (
-                      <span className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-md text-[9px] font-black text-emerald-400 px-2 py-1 rounded-md border border-neutral-800/60 select-none tracking-wide uppercase">
-                        + {project.images.length - 1} Images
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="p-5 space-y-3">
-                    <div>
-                      <h3 className="text-sm font-black uppercase text-neutral-200 tracking-wide group-hover:text-emerald-400 transition-colors">
-                        {project.title}
-                      </h3>
-                      {project.description && (
-                        <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed italic">
-                          &apos;{project.description}&apos;
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => handleOpenLightbox(project)}
-                  className="px-5 py-3 bg-neutral-950 border-t border-neutral-900/40 flex items-center justify-between text-[10px] font-black tracking-wider text-neutral-500 hover:text-emerald-400 cursor-pointer transition-colors uppercase"
-                >
-                  <span>Inspect Real Finish Assets</span>
-                  <span>View Project →</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* LIGHTBOX MODAL[cite: 4] */}
-      {activeLightboxProject && (
-        <div className="fixed inset-0 bg-black/95 z-50 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-fade-in">
-          <button
-            onClick={() => setActiveLightboxProject(null)}
-            className="absolute top-6 right-6 text-xs text-neutral-500 hover:text-white font-black uppercase tracking-widest border border-neutral-900 px-3 py-1.5 rounded-xl bg-neutral-950"
-          >
-            ✕ Close View
-          </button>
-
-          <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-            <div className="md:col-span-2 space-y-4">
-              <div className="w-full h-[55vh] bg-neutral-950 border border-neutral-900 rounded-2xl overflow-hidden relative flex items-center justify-center shadow-2xl select-none">
-                <img src={activeLightboxProject.images[currentImageIndex]} alt="" className="max-w-full max-h-full object-contain" />
-                {activeLightboxProject.images.length > 1 && (
-                  <>
-                    <button
-                      onClick={() => setCurrentImageIndex(p => p === 0 ? activeLightboxProject.images.length - 1 : p - 1)}
-                      className="absolute left-4 w-9 h-9 rounded-full bg-black/80 border border-neutral-800 text-white flex items-center justify-center text-sm font-black hover:bg-emerald-500 hover:text-black transition-all"
-                    >
-                      ←
-                    </button>
-                    <button
-                      onClick={() => setCurrentImageIndex(p => p === activeLightboxProject.images.length - 1 ? 0 : p + 1)}
-                      className="absolute right-4 w-9 h-9 rounded-full bg-black/80 border border-neutral-800 text-white flex items-center justify-center text-sm font-black hover:bg-emerald-500 hover:text-black transition-all"
-                    >
-                      →
-                    </button>
-                  </>
-                )}
+        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-500 pl-1">Interactive 3D Concepts</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {concepts3D.map((concept) => (
+            <div
+              key={concept.id}
+              onClick={() => router.push(`/view/${concept.id}`)}
+              className="group bg-neutral-950 border border-neutral-900 p-5 rounded-2xl flex flex-col justify-between cursor-pointer shadow-xl"
+            >
+              <h4 className="text-xs font-black uppercase text-neutral-200 truncate group-hover:text-emerald-400">{concept.name}</h4>
+              <div className="mt-4 pt-3 border-t border-neutral-900/40 text-[9px] font-black text-neutral-500 group-hover:text-emerald-400 uppercase">
+                Launch Visualizer &rarr;
               </div>
             </div>
-
-            <div className="space-y-4 text-left">
-              <div>
-                <span className="text-[9px] bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded text-neutral-400 font-bold uppercase tracking-wider">Showcase Deep View</span>
-                <h2 className="text-xl font-black text-white mt-1">{activeLightboxProject.title}</h2>
-                <p className="text-[11px] text-neutral-500 mt-0.5">📍 Location Area: {activeLightboxProject.location}</p>
-              </div>
-              <p className="text-xs text-neutral-400 leading-relaxed max-h-[25vh] overflow-y-auto pr-1">
-                {activeLightboxProject.description || "No project overview notes compiled."}
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
-      )}
-
+      </div>
     </div>
   );
 }

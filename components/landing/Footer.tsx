@@ -27,7 +27,7 @@ export default function Footer() {
         <div className="flex gap-6">
           <a href="#" className="hover:text-neutral-400 transition">Privacy Policy</a>
           <a href="#" className="hover:text-neutral-400 transition">Terms of Service</a>
-          <a href="#" className="hover:text-neutral-400 transition">Contact Infrastructure</a>
+          <a href="/login" className="hover:text-neutral-400 transition">Contact Infrastructure</a>
         </div>
       </div>
     </footer>

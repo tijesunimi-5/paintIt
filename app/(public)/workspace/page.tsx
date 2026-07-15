@@ -241,11 +241,69 @@ export default function WorkspacePage() {
     setSaveModalOpen(true);
   };
 
+  // const handleSaveWorkspace = async (e?: React.FormEvent) => {
+  //   if (e) e.preventDefault();
+
+  //   if (!saveName.trim()) {
+  //     showToast({ message: "Please enter a valid save name.", severity: "error" });
+  //     return;
+  //   }
+
+  //   const activeToken = accessToken || localStorage.getItem("paintit_access_token");
+  //   if (!activeToken) {
+  //     showToast({ message: "Session expired. Please log in again.", severity: "error" });
+  //     return;
+  //   }
+
+  //   setIsSaving(true);
+
+  //   try {
+  //     const saveBody = {
+  //       id: urlDesignId,
+  //       name: saveName.trim(), // Saves using your freshly typed input string
+  //       roomData: roomColors,
+  //       room_data: roomColors,
+  //       lightData: bulbs,
+  //       light_data: bulbs,
+  //       cameraData: cameraConfig,
+  //       camera_data: cameraConfig,
+  //       masterDesignId: templateId,
+  //       master_design_id: templateId,
+  //       parent_template_id: templateId,
+  //       globalEnvironment: { isNightMode },
+  //       global_environment: { isNightMode }
+  //     };
+
+  //     const res = await fetch(`${BACKEND_API_URL}/api/visualizations`, {
+  //       method: "POST",
+  //       headers: {
+  //         "Authorization": `Bearer ${activeToken}`,
+  //         "Content-Type": "application/json"
+  //       },
+  //       body: JSON.stringify(saveBody)
+  //     });
+
+  //     if (res.ok) {
+  //       showToast({ message: "Design synced successfully!", severity: "success" });
+  //       setDesignTitle(saveName.trim());
+  //       setSaveModalOpen(false);
+  //       router.push("/designs");
+  //     } else {
+  //       showToast({ message: "Error synchronizing configuration.", severity: "error" });
+  //     }
+  //   } catch (err) {
+  //     console.error(err);
+  //     showToast({ message: "Network connection failure.", severity: "error" });
+  //   } finally {
+  //     setIsSaving(false);
+  //   }
+  // };
+
   const handleSaveWorkspace = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     if (!saveName.trim()) {
-      showToast({ message: "Please enter a valid save name.", severity: "error" });
+      showToast({ message: "Please enter a valid save name.", severity: "info" });
       return;
     }
 
@@ -260,18 +318,20 @@ export default function WorkspacePage() {
     try {
       const saveBody = {
         id: urlDesignId,
-        name: saveName.trim(), // Saves using your freshly typed input string
+        name: saveName.trim(),
         roomData: roomColors,
         room_data: roomColors,
         lightData: bulbs,
         light_data: bulbs,
         cameraData: cameraConfig,
         camera_data: cameraConfig,
-        masterDesignId: templateId,
-        master_design_id: templateId,
-        parent_template_id: templateId,
         globalEnvironment: { isNightMode },
-        global_environment: { isNightMode }
+        global_environment: { isNightMode },
+
+        // 🎯 THE CRITICAL SYNC FIX: Explicitly bind the parent catalog key to both cases
+        masterDesignId: templateId,     // For camelCase backend parsers
+        master_design_id: templateId,    // For direct snake_case database mapping
+        parent_template_id: templateId   // Multi-case fallback tracing
       };
 
       const res = await fetch(`${BACKEND_API_URL}/api/visualizations`, {
@@ -287,7 +347,7 @@ export default function WorkspacePage() {
         showToast({ message: "Design synced successfully!", severity: "success" });
         setDesignTitle(saveName.trim());
         setSaveModalOpen(false);
-        router.push("/designs");
+        router.push("/dashboard/designs");
       } else {
         showToast({ message: "Error synchronizing configuration.", severity: "error" });
       }

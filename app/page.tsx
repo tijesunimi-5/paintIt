@@ -134,7 +134,7 @@ export default function Home() {
                       ✓
                     </div>
                     <h5 className="font-bold text-neutral-200 text-sm">Identity Linked Successfully</h5>
-                    <p className="text-[11px] text-neutral-500 mt-0.5 font-normal">Your browsing timeline metrics are locked in[cite: 1].</p>
+                    <p className="text-[11px] text-neutral-500 mt-0.5 font-normal">Your browsing timeline metrics are locked in.</p>
                   </motion.div>
                 )}
               </motion.div>
