@@ -1,8 +1,7 @@
-// app/painter/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 
 interface PublicProfile {
   id: string;
@@ -24,12 +23,25 @@ interface PortfolioProject {
   created_at: string;
 }
 
+interface Painter3DConcept {
+  id: string;
+  name: string;
+  parent_template_name: string;
+  room_data: Record<string, string>;
+  thumbnail_url?: string | null;
+  created_at: string;
+}
+
 export default function PublicPainterShowcasePage() {
-  const { id } = useParams();
+  const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const id = params?.id as string;
 
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [projects, setProjects] = useState<PortfolioProject[]>([]);
+  const [concepts3D, setConcepts3D] = useState<Painter3DConcept[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Tab Routing Manager State ('REAL_WORK' or 'THREE_D_STUDIO')
@@ -57,9 +69,11 @@ export default function PublicPainterShowcasePage() {
       try {
         // 1. Fetch Profile Credentials
         const profileRes = await fetch(`${BACKEND_URL}/api/profile/${id}`);
-        const profileData = await profileRes.json();
-        if (profileRes.ok && profileData.profile) {
-          setProfile(profileData.profile);
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          if (profileData.profile) {
+            setProfile(profileData.profile);
+          }
         }
 
         // 2. Fetch Projects mapped back to this explicit UUID token corridor
@@ -67,9 +81,9 @@ export default function PublicPainterShowcasePage() {
           method: "GET",
           headers: { "Content-Type": "application/json" }
         });
-        const portfolioData = await portfolioRes.json();
 
         if (portfolioRes.ok) {
+          const portfolioData = await portfolioRes.json();
           const loadedProjects = portfolioData.projects || (Array.isArray(portfolioData) ? portfolioData : []);
           setProjects(loadedProjects);
 
@@ -83,6 +97,14 @@ export default function PublicPainterShowcasePage() {
             }
           }
         }
+
+        // 3. Fetch 3D Concepts created by this painter
+        const conceptsRes = await fetch(`${BACKEND_URL}/api/visualizations/painter/${id}`);
+        if (conceptsRes.ok) {
+          const conceptsData = await conceptsRes.json();
+          setConcepts3D(conceptsData.visualizations || []);
+        }
+
       } catch (err) {
         console.error("Showcase data query exception:", err);
       } finally {
@@ -213,7 +235,7 @@ export default function PublicPainterShowcasePage() {
             </div>
           </div>
 
-          
+
           <div className="border-t border-neutral-900 pt-6 space-y-5">
             <div className="flex items-center gap-1.5 border-b border-neutral-900 pb-2">
               <button
@@ -232,7 +254,7 @@ export default function PublicPainterShowcasePage() {
                     : "text-neutral-500 hover:text-neutral-300"
                   }`}
               >
-                🎨 3D Design Swatches
+                🎨 3D Design Swatches ({concepts3D.length})
               </button>
             </div>
 
@@ -293,11 +315,53 @@ export default function PublicPainterShowcasePage() {
                 </div>
               )
             ) : (
-              /* 🎨 3D CANVAS RENDERS ROW SLIDE-IN PLACEHOLDER */
-              <div className="p-12 bg-neutral-950 border border-neutral-900 rounded-2xl text-center space-y-1">
-                <p className="text-xs font-bold text-neutral-400">3D Studio Preset Grid Empty</p>
-                <p className="text-[11px] text-neutral-600">Active design presets compiled inside your painter visualizer terminal space load up here.</p>
-              </div>
+              /* 🎨 3D CANVAS RENDERS ROW SLIDE-IN ACTIVE GRID */
+              concepts3D.length === 0 ? (
+                <div className="p-12 bg-neutral-950 border border-neutral-900 rounded-2xl text-center space-y-1">
+                  <p className="text-xs font-bold text-neutral-400">3D Studio Preset Grid Empty</p>
+                  <p className="text-[11px] text-neutral-600">Active design presets compiled inside your painter visualizer terminal space load up here.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {concepts3D.map((concept) => (
+                    <div
+                      key={concept.id}
+                      onClick={() => router.push(`/view/${concept.id}`)}
+                      className="group bg-neutral-950 border border-neutral-900 hover:border-emerald-500/40 rounded-2xl overflow-hidden flex flex-col justify-between cursor-pointer shadow-xl transition-all duration-200"
+                    >
+                      {/* 🖼️ THUMBNAIL CONTAINER WITH AUTO-POPULATE */}
+                      <div className="w-full h-40 bg-neutral-900 border-b border-neutral-900 relative flex items-center justify-center overflow-hidden">
+                        {concept.thumbnail_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={concept.thumbnail_url}
+                            alt={concept.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center gap-1.5 text-neutral-600">
+                            <span className="text-3xl">🏠</span>
+                            <span className="text-[9px] font-mono uppercase tracking-widest text-neutral-600">3D Interactive Model</span>
+                          </div>
+                        )}
+                        <div className="absolute top-2 right-2 bg-neutral-950/80 backdrop-blur-md px-2 py-0.5 rounded text-[8px] font-mono text-emerald-400 border border-neutral-800 uppercase font-bold">
+                          3D Canvas
+                        </div>
+                      </div>
+
+                      <div className="p-4 space-y-2">
+                        <h4 className="text-xs font-black uppercase text-neutral-200 truncate group-hover:text-emerald-400 transition-colors">
+                          {concept.name}
+                        </h4>
+                        <div className="flex items-center justify-between text-[9px] font-bold text-neutral-500 uppercase pt-2 border-t border-neutral-900">
+                          <span>Base: {concept.parent_template_name || "Architecture"}</span>
+                          <span className="text-emerald-400 group-hover:underline">Launch Visualizer &rarr;</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
 

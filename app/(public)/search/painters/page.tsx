@@ -127,7 +127,7 @@ export default function PublicPainterSearchPage() {
 
               <div className="pt-5 mt-4 border-t border-neutral-900/40">
                 <Link
-                  href={`/view/${painter.id}`}
+                  href={`/painter/${painter.id}`}
                   className="block w-full py-2.5 bg-neutral-900 hover:bg-emerald-500 border border-neutral-850 hover:border-emerald-500 text-center text-xs font-black uppercase tracking-wider text-neutral-300 hover:text-black rounded-xl transition-all"
                 >
                   View Profile & Studio ➔
