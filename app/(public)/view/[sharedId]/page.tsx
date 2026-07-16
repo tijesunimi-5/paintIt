@@ -217,12 +217,13 @@ export default function PublicProfileAndConceptPage() {
     document.removeEventListener("touchend", stopDrag);
   };
 
-  // 🎯 PIPELINE CORRECTLY ALIGNED INSIDE MAIN PROFILE COMPONENT SCOPE
   useEffect(() => {
     if (!targetId) return;
 
     const resolvePublicDataStream = async () => {
+      setIsLoading(true);
       try {
+        // 🎯 STEP 1: Attempt to resolve targetId as a public Share Link (UUID share_id)
         const conceptRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`);
 
         if (conceptRes.ok) {
@@ -232,14 +233,13 @@ export default function PublicProfileAndConceptPage() {
           setRoomColors(conceptData.room_data || {});
           setIs3DConceptShare(true);
 
-          // Fallback safely to 'tmpl_hostel_lux' if master_design_id is null or missing from the DB record
+          // Dynamic lookup: fetch master catalog parameters
           const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
-
           const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`);
+
           if (templateRes.ok) {
             const templateData = await templateRes.json();
 
-            // Hydrate the baseline lights configuration from the catalog template matrix
             if (templateData.lighting_settings) {
               setBulbs(
                 templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
@@ -258,16 +258,17 @@ export default function PublicProfileAndConceptPage() {
           return;
         }
 
+        // 🎯 STEP 2: If share link lookup failed, treat targetId as a Painter User ID (Public Contractor Profile view)
         const [profileRes, conceptsRes] = await Promise.all([
-          fetch(`${BACKEND_API_URL}/api/profile/${targetId}`),
-          fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`)
+          fetch(`${BACKEND_API_URL}/api/profile/${targetId}`).catch(() => null),
+          fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`).catch(() => null)
         ]);
 
-        if (profileRes.ok) {
+        if (profileRes && profileRes.ok) {
           const profileData = await profileRes.json();
           setProfile(profileData.profile || null);
         }
-        if (conceptsRes.ok) {
+        if (conceptsRes && conceptsRes.ok) {
           const conceptsData = await conceptsRes.json();
           setConcepts3D(conceptsData.visualizations || []);
         }
@@ -280,6 +281,34 @@ export default function PublicProfileAndConceptPage() {
 
     resolvePublicDataStream();
   }, [targetId, BACKEND_API_URL]);
+
+  useEffect(() => {
+    const lockOrientation = async () => {
+      try {
+        // Check if Screen Orientation API is supported on the device
+        if (typeof window !== "undefined" && "orientation" in screen && "lock" in screen.orientation) {
+          // Force landscape orientation
+          await (screen.orientation as ScreenOrientation).lock("landscape");
+        }
+      } catch (err) {
+        // Mobile browsers require a user gesture (like clicking 'Launch Visualizer') to lock orientation
+        console.log("Auto-landscape lock requires user interaction or isn't supported on this browser:", err);
+      }
+    };
+
+    lockOrientation();
+
+    // 🎯 Clean up: Return to portrait/any orientation when leaving the 3D page
+    return () => {
+      try {
+        if (typeof window !== "undefined" && "orientation" in screen && "unlock" in screen.orientation) {
+          screen.orientation.unlock();
+        }
+      } catch (err) {
+        console.log("Failed to unlock orientation:", err);
+      }
+    };
+  }, []);
 
   const handleSaveToClientHub = async () => {
     if (!accessToken || !user) {
