@@ -9,8 +9,10 @@ interface PublicProfile {
   role: string;
   bio: string | null;
   location: string | null;
+  phone_number: string | null;
   experience_years: number;
   skills: string[];
+  avatar_url: string | null;
 }
 
 interface PortfolioProject {
@@ -61,52 +63,84 @@ export default function PublicPainterShowcasePage() {
 
   const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-  // 🔄 Hydrate Public Data Records
+  // 🔄 Hydrate Public Data Records with Independent Fallbacks
   useEffect(() => {
     if (!id) return;
 
     const fetchShowcaseData = async () => {
+      setLoading(true);
+
+      // 1. Fetch Profile Credentials
       try {
-        // 1. Fetch Profile Credentials
         const profileRes = await fetch(`${BACKEND_URL}/api/profile/${id}`);
         if (profileRes.ok) {
           const profileData = await profileRes.json();
-          if (profileData.profile) {
-            setProfile(profileData.profile);
+          const loadedProfile = profileData.profile || profileData;
+          if (loadedProfile) {
+            setProfile({
+              id: loadedProfile.id || id,
+              full_name: loadedProfile.full_name || "Verified Contractor",
+              role: loadedProfile.role || "PAINTER",
+              bio: loadedProfile.bio || null,
+              location: loadedProfile.location || "Ibadan, Nigeria",
+              phone_number: loadedProfile.phone_number || null,
+              experience_years: loadedProfile.experience_years || 0,
+              skills: Array.isArray(loadedProfile.skills) ? loadedProfile.skills : [],
+              avatar_url: loadedProfile.avatar_url || null,
+            });
           }
         }
+      } catch (err) {
+        console.error("Profile fetch error:", err);
+      }
 
-        // 2. Fetch Projects mapped back to this explicit UUID token corridor
-        const portfolioRes = await fetch(`${BACKEND_URL}/api/portfolio/projects?userId=${id}`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" }
-        });
+      // 2. Fetch Projects (Checks both portfolio endpoints safely)
+      try {
+        let portfolioRes = await fetch(`${BACKEND_URL}/api/portfolio/projects?userId=${id}`);
+        if (!portfolioRes.ok) {
+          portfolioRes = await fetch(`${BACKEND_URL}/api/portfolio/painter/${id}`);
+        }
 
         if (portfolioRes.ok) {
           const portfolioData = await portfolioRes.json();
-          const loadedProjects = portfolioData.projects || (Array.isArray(portfolioData) ? portfolioData : []);
+          const loadedProjects =
+            portfolioData.projects ||
+            portfolioData.portfolio ||
+            (Array.isArray(portfolioData) ? portfolioData : []);
+
           setProjects(loadedProjects);
 
           // 🔗 AUTO-LIGHTBOX DEEP LINK CHECKER
           const targetProjectParam = searchParams.get("project");
           if (targetProjectParam) {
-            const matchedProject = loadedProjects.find((p: PortfolioProject) => p.id.toString() === targetProjectParam);
+            const matchedProject = loadedProjects.find(
+              (p: PortfolioProject) => p.id.toString() === targetProjectParam
+            );
             if (matchedProject) {
               setActiveLightboxProject(matchedProject);
               setCurrentLightboxImageIdx(0);
             }
           }
         }
+      } catch (err) {
+        console.error("Portfolio projects fetch error:", err);
+      }
 
-        // 3. Fetch 3D Concepts created by this painter
+      // 3. Fetch 3D Concepts created by this painter
+      try {
         const conceptsRes = await fetch(`${BACKEND_URL}/api/visualizations/painter/${id}`);
         if (conceptsRes.ok) {
           const conceptsData = await conceptsRes.json();
-          setConcepts3D(conceptsData.visualizations || []);
-        }
+          const loadedConcepts = conceptsData.visualizations || conceptsData.data || [];
+          setConcepts3D(loadedConcepts);
 
+          // Default tab logic: switch to 3D studio if no real projects exist
+          if (loadedConcepts.length > 0 && projects.length === 0) {
+            setActiveTab("THREE_D_STUDIO");
+          }
+        }
       } catch (err) {
-        console.error("Showcase data query exception:", err);
+        console.error("3D concepts fetch error:", err);
       } finally {
         setLoading(false);
       }
@@ -161,7 +195,7 @@ export default function PublicPainterShowcasePage() {
   };
 
   const showToastNotification = (msg: string) => {
-    alert(msg); // Easy lightweight fallback indicator
+    alert(msg);
   };
 
   if (loading) {
@@ -181,6 +215,8 @@ export default function PublicPainterShowcasePage() {
       </div>
     );
   }
+
+  const nameInitial = profile.full_name ? profile.full_name.charAt(0).toUpperCase() : "P";
 
   return (
     <div className="min-h-screen bg-black text-neutral-200 font-sans antialiased relative selection:bg-emerald-500 selection:text-black">
@@ -207,10 +243,39 @@ export default function PublicPainterShowcasePage() {
 
         {/* Profile Content Column */}
         <div className="md:col-span-2 space-y-8">
-          <div>
-            <span className="text-[9px] bg-emerald-950/40 border border-emerald-900/50 px-2 py-0.5 rounded text-emerald-400 font-black uppercase tracking-widest select-none">Verified Finish Contractor</span>
-            <h1 className="text-3xl font-black text-neutral-100 tracking-tight mt-2">{profile.full_name}</h1>
-            <p className="text-xs text-neutral-500 font-medium mt-0.5">Experience Rating: <span className="text-neutral-300 font-bold">{profile.experience_years} Years Active</span></p>
+
+          {/* 👤 Profile Header Card with Avatar */}
+          <div className="p-6 bg-neutral-950 border border-neutral-900 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-xl">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-black text-2xl text-emerald-400 overflow-hidden relative shrink-0 shadow-inner">
+                {profile.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{nameInitial}</span>
+                )}
+              </div>
+              <div className="space-y-1">
+                <span className="text-[9px] bg-emerald-950/40 border border-emerald-900/50 px-2 py-0.5 rounded text-emerald-400 font-black uppercase tracking-widest select-none">
+                  Verified Finish Contractor
+                </span>
+                <h1 className="text-2xl font-black text-neutral-100 tracking-tight">{profile.full_name}</h1>
+                <p className="text-xs text-neutral-500 font-medium">
+                  Experience Rating: <span className="text-neutral-300 font-bold">{profile.experience_years || 0} Years Active</span>
+                </p>
+              </div>
+            </div>
+
+            {profile.phone_number && (
+              <a
+                href={`https://wa.me/${profile.phone_number.replace(/\s+/g, "")}`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shrink-0 text-center"
+              >
+                💬 WhatsApp Chat ➔
+              </a>
+            )}
           </div>
 
           <div className="space-y-2 border-t border-neutral-900 pt-6">
@@ -234,7 +299,6 @@ export default function PublicPainterShowcasePage() {
               )}
             </div>
           </div>
-
 
           <div className="border-t border-neutral-900 pt-6 space-y-5">
             <div className="flex items-center gap-1.5 border-b border-neutral-900 pb-2">
@@ -279,7 +343,7 @@ export default function PublicPainterShowcasePage() {
                             <div className="w-full h-full flex items-center justify-center text-[10px] text-neutral-600 font-bold uppercase tracking-wider">Empty Slate</div>
                           )}
                           <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 rounded text-[9px] font-bold text-neutral-400 border border-neutral-850">
-                            📍 {project.location}
+                            📍 {project.location || "Ibadan"}
                           </div>
                           {project.images?.length > 1 && (
                             <span className="absolute bottom-2 right-2 bg-black/80 text-[9px] font-bold text-neutral-400 px-2 py-0.5 rounded border border-neutral-800">
@@ -315,7 +379,7 @@ export default function PublicPainterShowcasePage() {
                 </div>
               )
             ) : (
-              /* 🎨 3D CANVAS RENDERS ROW SLIDE-IN ACTIVE GRID */
+              /* 🎨 3D CANVAS RENDERS ACTIVE GRID */
               concepts3D.length === 0 ? (
                 <div className="p-12 bg-neutral-950 border border-neutral-900 rounded-2xl text-center space-y-1">
                   <p className="text-xs font-bold text-neutral-400">3D Studio Preset Grid Empty</p>
@@ -329,7 +393,6 @@ export default function PublicPainterShowcasePage() {
                       onClick={() => router.push(`/view/${concept.id}`)}
                       className="group bg-neutral-950 border border-neutral-900 hover:border-emerald-500/40 rounded-2xl overflow-hidden flex flex-col justify-between cursor-pointer shadow-xl transition-all duration-200"
                     >
-                      {/* 🖼️ THUMBNAIL CONTAINER WITH AUTO-POPULATE */}
                       <div className="w-full h-40 bg-neutral-900 border-b border-neutral-900 relative flex items-center justify-center overflow-hidden">
                         {concept.thumbnail_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
