@@ -285,24 +285,28 @@ export default function PublicProfileAndConceptPage() {
   useEffect(() => {
     const lockOrientation = async () => {
       try {
-        // Check if Screen Orientation API is supported on the device
-        if (typeof window !== "undefined" && "orientation" in screen && "lock" in screen.orientation) {
-          // Force landscape orientation
-          await (screen.orientation as ScreenOrientation).lock("landscape");
+        if (
+          typeof window !== "undefined" &&
+          "orientation" in screen &&
+          "lock" in (screen.orientation as unknown as Record<string, unknown>)
+        ) {
+          await (screen.orientation as unknown as { lock: (orientation: string) => Promise<void> }).lock("landscape");
         }
       } catch (err) {
-        // Mobile browsers require a user gesture (like clicking 'Launch Visualizer') to lock orientation
         console.log("Auto-landscape lock requires user interaction or isn't supported on this browser:", err);
       }
     };
 
     lockOrientation();
 
-    // 🎯 Clean up: Return to portrait/any orientation when leaving the 3D page
     return () => {
       try {
-        if (typeof window !== "undefined" && "orientation" in screen && "unlock" in screen.orientation) {
-          screen.orientation.unlock();
+        if (
+          typeof window !== "undefined" &&
+          "orientation" in screen &&
+          "unlock" in (screen.orientation as unknown as Record<string, unknown>)
+        ) {
+          (screen.orientation as unknown as { unlock: () => void }).unlock();
         }
       } catch (err) {
         console.log("Failed to unlock orientation:", err);
