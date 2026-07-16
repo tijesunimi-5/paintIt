@@ -84,7 +84,7 @@ function WorkspaceContent() {
 
   const [customColors, setCustomColors] = useState<CustomColor[]>([]);
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const initialRoomColorsRef = useRef(roomColors);
   const initialCameraConfigRef = useRef(cameraConfig);
 
@@ -274,7 +274,7 @@ function WorkspaceContent() {
         showToast({ message: "Design synced successfully!", severity: "success" });
         setDesignTitle(saveName.trim());
         setSaveModalOpen(false);
-        router.push("/dashboard/designs");
+        router.push("/designs");
       } else {
         showToast({ message: "Error synchronizing configuration.", severity: "error" });
       }
@@ -308,7 +308,7 @@ function WorkspaceContent() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => router.push("/dashboard/designs")}
+            onClick={() => router.push("/designs")}
             className="px-3 py-1.5 bg-neutral-900 text-[10px] font-black uppercase tracking-wider rounded-xl text-neutral-400 border border-neutral-850"
           >
             Exit
