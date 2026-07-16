@@ -23,6 +23,7 @@ interface SharedDataPayload {
   parent_template_name: string;
   painter_id: string;
   full_name: string;
+  shared_at?: string;
   bio: string | null;
   location: string | null;
   experience_years: number;
@@ -119,7 +120,7 @@ function ClientInteractiveCanvas({
               color={bulb.color}
               distance={bulb.distance || 15}
               decay={1.2}
-              castShadow
+              castShadow={false}
             />
           </group>
         );
@@ -223,10 +224,65 @@ export default function PublicProfileAndConceptPage() {
     const resolvePublicDataStream = async () => {
       setIsLoading(true);
       try {
-        // 🎯 STEP 1: Attempt to resolve targetId as a public Share Link (UUID share_id)
-        const conceptRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`);
+        // 🎯 STEP 1: Attempt to resolve targetId as a Direct Catalog Template (e.g., tmpl_hostel_lux)
+        const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${targetId}`).catch(() => null);
 
-        if (conceptRes.ok) {
+        if (catalogRes && catalogRes.ok) {
+          const templateData = await catalogRes.json() as {
+            title?: string;
+            default_room_data?: Record<string, string>;
+            id?: string;
+            model_url?: string;
+            lighting_settings?: DBRawLight[];
+            camera_settings?: DBCameraConfig;
+          };
+
+          const catalogSharedConcept: SharedDataPayload = {
+            share_id: targetId,
+            shared_at: new Date().toISOString(),
+            design_name: templateData.title || "Master Architecture Concept",
+            room_data: templateData.default_room_data || {},
+            parent_template_name: templateData.title || "Master Architecture",
+            master_design_id: templateData.id,
+            painter_id: "system",
+            full_name: "PaintIt Catalog",
+            bio: "Official PaintIt 3D Spatial Architecture Model.",
+            location: "Virtual Studio",
+            experience_years: 5,
+            skills: ["3D Visualization", "Spatial Design"],
+            avatar_url: "/logo.png",
+            phone_number: "",
+            model_url: templateData.model_url || "/models/selfcon.glb"
+          };
+
+          setSharedConcept(catalogSharedConcept);
+
+          setRoomColors(templateData.default_room_data || {});
+
+          if (templateData.lighting_settings) {
+            setBulbs(
+              templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+                ...light,
+                name: `Bulb #${index + 1}`,
+                enabled: light.visible !== undefined ? light.visible : true,
+                visible: light.visible !== undefined ? light.visible : true
+              }))
+            );
+          }
+
+          if (templateData.camera_settings) {
+            setCameraConfig(templateData.camera_settings);
+          }
+
+          setIs3DConceptShare(true);
+          setIsLoading(false);
+          return;
+        }
+
+        // 🎯 STEP 2: Attempt to resolve targetId as a public Share Link (UUID share_id)
+        const conceptRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`).catch(() => null);
+
+        if (conceptRes && conceptRes.ok) {
           const conceptBody = await conceptRes.json();
           const conceptData = conceptBody.data as SharedDataPayload;
           setSharedConcept(conceptData);
@@ -235,9 +291,9 @@ export default function PublicProfileAndConceptPage() {
 
           // Dynamic lookup: fetch master catalog parameters
           const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
-          const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`);
+          const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
 
-          if (templateRes.ok) {
+          if (templateRes && templateRes.ok) {
             const templateData = await templateRes.json();
 
             if (templateData.lighting_settings) {
@@ -258,7 +314,7 @@ export default function PublicProfileAndConceptPage() {
           return;
         }
 
-        // 🎯 STEP 2: If share link lookup failed, treat targetId as a Painter User ID (Public Contractor Profile view)
+        // 🎯 STEP 3: If share link lookup failed, treat targetId as a Painter User ID
         const [profileRes, conceptsRes] = await Promise.all([
           fetch(`${BACKEND_API_URL}/api/profile/${targetId}`).catch(() => null),
           fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`).catch(() => null)
@@ -364,18 +420,22 @@ export default function PublicProfileAndConceptPage() {
 
     setSendingFeedback(true);
     try {
-      const response = await fetch(`${BACKEND_API_URL}/api/visualizations/feedback`, {
+      const response = await fetch(`${BACKEND_API_URL}/api/leads`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(accessToken ? { "Authorization": `Bearer ${accessToken}` } : {})
         },
         body: JSON.stringify({
-          shareId: targetId,
-          roomData: roomColors,
-          lightData: bulbs,
-          message: clientMessage.trim(),
-          clientName: user ? (user as AuthUserPayload).full_name : "Anonymous Client"
+          email: user ? (user as AuthUserPayload).email : "client@paintit.app",
+          source: "DESIGN_FEEDBACK",
+          metaTracking: {
+            shareId: targetId,
+            clientName: user ? (user as AuthUserPayload).full_name : "Anonymous Client",
+            message: clientMessage.trim(),
+            roomColors: roomColors,
+            bulbs: bulbs
+          }
         })
       });
 
@@ -409,25 +469,27 @@ export default function PublicProfileAndConceptPage() {
     return (
       <div className="fixed inset-0 bg-neutral-950 flex flex-col overflow-hidden select-none z-40 text-white font-sans">
 
-        {/* Navigation HUD */}
-        <div className="w-full bg-neutral-950 border-b border-neutral-900 px-4 py-3 z-20 flex items-center justify-between">
+        {/* Navigation HUD Header (Shifted down top-14 to clear app navbar) */}
+        <div className="fixed top-14 left-0 right-0 bg-neutral-950/90 border-b border-neutral-900 px-4 py-2.5 z-50 flex items-center justify-between backdrop-blur-md shadow-xl transition-all">
           <div>
-            <h1 className="text-xs font-black uppercase tracking-wider text-neutral-100">{sharedConcept.design_name}</h1>
-            <p className="text-[9px] text-neutral-500 uppercase tracking-widest mt-0.5">
+            <h1 className="text-xs font-black uppercase tracking-wider text-neutral-100 truncate max-w-[180px] sm:max-w-xs">
+              {sharedConcept.design_name}
+            </h1>
+            <p className="text-[9px] text-neutral-500 uppercase tracking-widest mt-0.5 font-mono">
               Painter: <span className="text-emerald-400 font-bold">{sharedConcept.full_name}</span>
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <button
               onClick={() => setFeedbackModalOpen(true)}
-              className="px-3.5 py-1.5 bg-cyan-600 text-white text-[10px] font-black uppercase tracking-wider rounded-xl shadow-lg"
+              className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-transform active:scale-95"
             >
               Send to Painter ✉️
             </button>
             <button
               onClick={handleSaveToClientHub}
               disabled={importing}
-              className="px-3.5 py-1.5 bg-emerald-500 text-neutral-950 text-[10px] font-black uppercase tracking-wider rounded-xl shadow-lg"
+              className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 text-[10px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-transform active:scale-95"
             >
               {importing ? "Importing..." : "Save to Hub"}
             </button>
@@ -435,7 +497,7 @@ export default function PublicProfileAndConceptPage() {
         </div>
 
         {/* 3D Viewport View */}
-        <div className="flex-1 w-full h-full relative z-10">
+        <div className="flex-1 w-full h-full relative z-10 pt-24">
           <Canvas camera={{ position: cameraConfig.position || [-2.73, 3.28, -2.51], fov: 65 }}>
             <Suspense fallback={null}>
               <ClientInteractiveCanvas
@@ -455,8 +517,8 @@ export default function PublicProfileAndConceptPage() {
           <button
             onClick={() => { setActiveTab("paint"); setIsPanelCollapsed(false); }}
             className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "paint" && !isPanelCollapsed
-              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-              : "bg-neutral-900/90 border-neutral-800 text-white"
+                ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+                : "bg-neutral-900/90 border-neutral-800 text-white"
               }`}
           >
             🎨
@@ -464,8 +526,8 @@ export default function PublicProfileAndConceptPage() {
           <button
             onClick={() => { setActiveTab("lighting"); setIsPanelCollapsed(false); }}
             className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "lighting" && !isPanelCollapsed
-              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-              : "bg-neutral-900/90 border-neutral-800 text-white"
+                ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+                : "bg-neutral-900/90 border-neutral-800 text-white"
               }`}
           >
             💡
@@ -519,7 +581,9 @@ export default function PublicProfileAndConceptPage() {
             <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 p-6 rounded-2xl shadow-2xl space-y-4">
               <div className="space-y-1">
                 <h3 className="text-sm font-black uppercase tracking-wider text-neutral-100">Submit Adjustments to Painter</h3>
-                <p className="text-[11px] text-neutral-400">Your currently selected room configuration preset colors and bulb settings will be attached safely to this message log stream.</p>
+                <p className="text-[11px] text-neutral-400">
+                  Your currently selected room configuration preset colors and bulb settings will be attached safely to this message log stream.
+                </p>
               </div>
 
               <form onSubmit={handleSendFeedbackToPainter} className="space-y-4">

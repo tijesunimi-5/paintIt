@@ -1,4 +1,3 @@
-// app/(painter)/dashboard/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -28,6 +27,17 @@ interface InboundLead {
   conversion_source: string;
   created_at: string;
   isLocked?: boolean;
+  roomColors?: Record<string, string> | null;
+}
+
+interface RawBackendLead {
+  id: number;
+  email: string;
+  conversion_source: string;
+  meta_tracking_data?: string | Record<string, unknown> | null;
+  project_description?: string;
+  created_at: string;
+  isLocked?: boolean;
 }
 
 interface ProfileCompletenessCheck {
@@ -44,10 +54,9 @@ export default function PainterDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [contentMetrics, setContentMetrics] = useState<ContentMetrics>({ totalProjects: 0, totalImages: 0 });
   const [leads, setLeads] = useState<InboundLead[]>([]);
-  const [isPlanQualified, setIsPlanQualified] = useState<boolean>(true);
+  const [isPlanQualified] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Dedicated dynamic state to pull profile properties straight from the database row
   const [dbProfile, setDbProfile] = useState<{
     bio: string | null;
     location: string | null;
@@ -64,7 +73,6 @@ export default function PainterDashboardPage() {
       }
 
       try {
-        // 1. Fetch dynamic profile data directly from your fresh endpoint layout
         const profileRes = await fetch(`${BACKEND_API_URL}/api/profile/me`, {
           method: "GET",
           headers: {
@@ -83,13 +91,11 @@ export default function PainterDashboardPage() {
             avatar_url: p.avatar_url || null
           });
 
-          // Centralize update immediately synchronizes the welcome block picture globally
           if (p.avatar_url) {
             updateUser({ avatarUrl: p.avatar_url, avatar_url: p.avatar_url });
           }
         }
 
-        // 2. Fetch business performance counters
         const overviewRes = await fetch(`${BACKEND_API_URL}/api/analytics/overview`, {
           method: "GET",
           headers: {
@@ -109,8 +115,8 @@ export default function PainterDashboardPage() {
           });
         }
 
-        // 3. Fetch client job requests
-        const leadsRes = await fetch(`${BACKEND_API_URL}/api/analytics/leads`, {
+        // Fetch client job requests and 3D feedback from /api/leads/me
+        const leadsRes = await fetch(`${BACKEND_API_URL}/api/leads/me`, {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${accessToken}`,
@@ -120,8 +126,37 @@ export default function PainterDashboardPage() {
 
         if (leadsRes.ok) {
           const leadsData = await leadsRes.json();
-          setLeads(leadsData.leads || []);
-          setIsPlanQualified(leadsData.qualified ?? true);
+          const rawLeads: RawBackendLead[] = leadsData.pipelineLeads || leadsData.leads || [];
+
+          const formattedLeads: InboundLead[] = rawLeads.map((item) => {
+            let meta: Record<string, unknown> = {};
+            if (typeof item.meta_tracking_data === "string") {
+              try {
+                meta = JSON.parse(item.meta_tracking_data);
+              } catch {
+                meta = {};
+              }
+            } else if (item.meta_tracking_data && typeof item.meta_tracking_data === "object") {
+              meta = item.meta_tracking_data as Record<string, unknown>;
+            }
+
+            return {
+              id: item.id,
+              client_name: (meta.clientName as string) || item.email?.split("@")[0] || "Interested Client",
+              client_email: item.email,
+              client_phone: (meta.phone as string) || null,
+              project_description:
+                (meta.message as string) ||
+                item.project_description ||
+                "Interested in custom painting services.",
+              conversion_source: item.conversion_source,
+              created_at: item.created_at,
+              isLocked: item.isLocked,
+              roomColors: (meta.roomColors as Record<string, string>) || null
+            };
+          });
+
+          setLeads(formattedLeads);
         }
 
       } catch (err) {
@@ -151,7 +186,6 @@ export default function PainterDashboardPage() {
   const displayFirstName = targetName.trim() ? targetName.trim().split(" ")[0] : "Painter";
   const nameInitialLetter = targetName.trim() ? targetName.trim().charAt(0).toUpperCase() : "P";
 
-  // Read the active database profile asset link directly
   const userAvatarImageSrc = dbProfile.avatar_url || user?.avatarUrl || user?.avatar_url || null;
 
   const isProfileCompleted = displayFirstName !== "Painter" && displayFirstName !== "Contractor" && !!targetName;
@@ -160,7 +194,6 @@ export default function PainterDashboardPage() {
   const hasUploadedWork = contentMetrics.totalProjects > 0 || contentMetrics.totalImages > 0;
   const hasPublishedCanvas = (stats?.designViews || 0) > 0;
 
-  // 📋 SIMPLIFIED LAYMAN PROFILE CHECKS
   const onboardingChecklist: ProfileCompletenessCheck[] = [
     {
       id: "avatar",
@@ -245,7 +278,6 @@ export default function PainterDashboardPage() {
       ) : (
         <div className="space-y-6">
 
-          {/* ⚡ SIMPLIFIED PROFILE SETUP RADAR */}
           {pendingOnboardingTasks.length > 0 && (
             <div className="p-5 border border-amber-500/10 bg-linear-to-br from-amber-500/2 via-neutral-950 to-neutral-950 rounded-2xl space-y-4 shadow-xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/2 rounded-full blur-3xl pointer-events-none" />
@@ -265,7 +297,6 @@ export default function PainterDashboardPage() {
                 </div>
               </div>
 
-              {/* Progress Slider Track */}
               <div className="w-full bg-neutral-900 rounded-full h-1 overflow-hidden">
                 <div
                   className="bg-amber-400 h-1 rounded-full transition-all duration-500"
@@ -273,14 +304,13 @@ export default function PainterDashboardPage() {
                 />
               </div>
 
-              {/* Action Pending Items Grid Mapping */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                 {pendingOnboardingTasks.map((task) => (
                   <div
                     key={task.id}
                     className="p-3.5 bg-neutral-950 border border-neutral-900 rounded-xl flex items-start gap-3 transition-colors hover:border-neutral-850"
                   >
-                    <div className="w-4 h-4 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-mono text-[9px] font-black text-amber-400 mt-0.5 select-none shrink-0" >
+                    <div className="w-4 h-4 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-mono text-[9px] font-black text-amber-400 mt-0.5 select-none shrink-0">
                       !
                     </div>
                     <div>
@@ -303,7 +333,7 @@ export default function PainterDashboardPage() {
             </div>
           )}
 
-          {/* 📊 4-Column Business Performance Indicator Block */}
+          {/* Business Counters */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="p-4 bg-neutral-950 border border-neutral-900 rounded-2xl shadow-md">
               <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-wider block">Profile Views</span>
@@ -353,12 +383,11 @@ export default function PainterDashboardPage() {
           {/* ========================================================== */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-            {/* Left Column: Client Messages List */}
             <div className="md:col-span-2 bg-neutral-950 border border-neutral-900 rounded-2xl p-5 space-y-4 shadow-xl">
               <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-neutral-100">Customer Messages</h3>
-                  <p className="text-[11px] text-neutral-500 mt-0.5">Job requests and notes sent by clients interested in your services.</p>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-neutral-100">Customer Messages & 3D Revisions</h3>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">Job requests, notes, and color feedback sent by clients.</p>
                 </div>
                 <span className="text-[10px] bg-neutral-900 border border-neutral-800 px-2.5 py-0.5 rounded-full text-neutral-400 font-bold select-none">
                   {leads.length} Inquiries
@@ -373,6 +402,7 @@ export default function PainterDashboardPage() {
               ) : (
                 <div className="space-y-2.5 max-h-[48vh] overflow-y-auto pr-1">
                   {leads.map((lead) => {
+                    const is3DFeedback = lead.conversion_source === "DESIGN_FEEDBACK";
                     const isPopupLead = lead.conversion_source === "CLIENT_POPUP" || lead.conversion_source === "POPUP_CAPTURE";
 
                     return (
@@ -381,15 +411,17 @@ export default function PainterDashboardPage() {
                         className="p-4 bg-neutral-900/40 border border-neutral-900 rounded-xl space-y-2 transition-colors hover:bg-neutral-900/70"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                          <div>
+                          <div className="flex items-center gap-2">
                             <span className="text-xs font-black tracking-tight text-neutral-200">
                               {lead.client_name || "Interested Homeowner"}
                             </span>
-                            <span className={`text-[9px] ml-2 uppercase tracking-widest border px-1.5 py-0.5 rounded ${isPopupLead
-                              ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-400"
-                              : "bg-neutral-950 border-neutral-850 text-neutral-500"
+                            <span className={`text-[9px] uppercase tracking-widest border px-1.5 py-0.5 rounded font-bold ${is3DFeedback
+                                ? "bg-cyan-950/40 border-cyan-800/60 text-cyan-400"
+                                : isPopupLead
+                                  ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-400"
+                                  : "bg-neutral-950 border-neutral-850 text-neutral-500"
                               }`}>
-                              {isPopupLead ? "🎯 Subscriber" : "💼 Job Request"}
+                              {is3DFeedback ? "🎨 3D Color Selection" : isPopupLead ? "🎯 Subscriber" : "💼 Job Request"}
                             </span>
                           </div>
                           <span className="text-[10px] text-neutral-500 font-medium">
@@ -397,8 +429,8 @@ export default function PainterDashboardPage() {
                           </span>
                         </div>
 
-                        <p className="text-[11px] text-neutral-400 leading-relaxed italic bg-black/20 p-2.5 rounded-lg border border-neutral-900/40">
-                          &apos;{lead.project_description}&apos;
+                        <p className="text-[11px] text-neutral-300 leading-relaxed bg-black/40 p-3 rounded-lg border border-neutral-900/60 font-medium">
+                          {lead.project_description}
                         </p>
 
                         <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] border-t border-neutral-900/60 mt-2">
