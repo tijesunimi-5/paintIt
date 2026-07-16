@@ -23,6 +23,7 @@ interface SharedDataPayload {
   parent_template_name: string;
   painter_id: string;
   full_name: string;
+  email?: string | null;
   shared_at?: string;
   bio: string | null;
   location: string | null;
@@ -224,59 +225,55 @@ export default function PublicProfileAndConceptPage() {
     const resolvePublicDataStream = async () => {
       setIsLoading(true);
       try {
-        // 🎯 STEP 1: Attempt to resolve targetId as a Direct Catalog Template (e.g., tmpl_hostel_lux)
-        const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${targetId}`).catch(() => null);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
 
-        if (catalogRes && catalogRes.ok) {
-          const templateData = await catalogRes.json() as {
-            title?: string;
-            default_room_data?: Record<string, string>;
-            id?: string;
-            model_url?: string;
-            lighting_settings?: DBRawLight[];
-            camera_settings?: DBCameraConfig;
-          };
+        // 🎯 STEP 1: Only check catalog if targetId is NOT a UUID (e.g. "tmpl_hostel_lux")
+        if (!isUuid) {
+          const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${targetId}`).catch(() => null);
 
-          const catalogSharedConcept: SharedDataPayload = {
-            share_id: targetId,
-            shared_at: new Date().toISOString(),
-            design_name: templateData.title || "Master Architecture Concept",
-            room_data: templateData.default_room_data || {},
-            parent_template_name: templateData.title || "Master Architecture",
-            master_design_id: templateData.id,
-            painter_id: "system",
-            full_name: "PaintIt Catalog",
-            bio: "Official PaintIt 3D Spatial Architecture Model.",
-            location: "Virtual Studio",
-            experience_years: 5,
-            skills: ["3D Visualization", "Spatial Design"],
-            avatar_url: "/logo.png",
-            phone_number: "",
-            model_url: templateData.model_url || "/models/selfcon.glb"
-          };
+          if (catalogRes && catalogRes.ok) {
+            const templateData = await catalogRes.json();
 
-          setSharedConcept(catalogSharedConcept);
+            setSharedConcept({
+              share_id: targetId,
+              shared_at: new Date().toISOString(),
+              design_name: templateData.title || "Master Architecture Concept",
+              room_data: templateData.default_room_data || {},
+              parent_template_name: templateData.title || "Master Architecture",
+              master_design_id: templateData.id,
+              painter_id: "system",
+              full_name: "PaintIt Catalog",
+              email: "studio@paintit.app",
+              bio: "Official PaintIt 3D Spatial Architecture Model.",
+              location: "Virtual Studio",
+              experience_years: 5,
+              skills: ["3D Visualization", "Spatial Design"],
+              avatar_url: "/logo.png",
+              phone_number: "",
+              model_url: templateData.model_url || "/models/selfcon.glb"
+            });
 
-          setRoomColors(templateData.default_room_data || {});
+            setRoomColors(templateData.default_room_data || {});
 
-          if (templateData.lighting_settings) {
-            setBulbs(
-              templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
-                ...light,
-                name: `Bulb #${index + 1}`,
-                enabled: light.visible !== undefined ? light.visible : true,
-                visible: light.visible !== undefined ? light.visible : true
-              }))
-            );
+            if (templateData.lighting_settings) {
+              setBulbs(
+                templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+                  ...light,
+                  name: `Bulb #${index + 1}`,
+                  enabled: light.visible !== undefined ? light.visible : true,
+                  visible: light.visible !== undefined ? light.visible : true
+                }))
+              );
+            }
+
+            if (templateData.camera_settings) {
+              setCameraConfig(templateData.camera_settings);
+            }
+
+            setIs3DConceptShare(true);
+            setIsLoading(false);
+            return;
           }
-
-          if (templateData.camera_settings) {
-            setCameraConfig(templateData.camera_settings);
-          }
-
-          setIs3DConceptShare(true);
-          setIsLoading(false);
-          return;
         }
 
         // 🎯 STEP 2: Attempt to resolve targetId as a public Share Link (UUID share_id)
@@ -289,7 +286,6 @@ export default function PublicProfileAndConceptPage() {
           setRoomColors(conceptData.room_data || {});
           setIs3DConceptShare(true);
 
-          // Dynamic lookup: fetch master catalog parameters
           const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
           const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
 
@@ -314,7 +310,7 @@ export default function PublicProfileAndConceptPage() {
           return;
         }
 
-        // 🎯 STEP 3: If share link lookup failed, treat targetId as a Painter User ID
+        // 🎯 STEP 3: Fallback - Treat targetId as a Painter User ID
         const [profileRes, conceptsRes] = await Promise.all([
           fetch(`${BACKEND_API_URL}/api/profile/${targetId}`).catch(() => null),
           fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`).catch(() => null)
