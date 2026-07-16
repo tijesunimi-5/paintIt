@@ -23,3 +23,30 @@ export interface AnalyticsSummary {
   willingnessToPay: { name: string; value: number }[];
   pricingPreferences: { name: string; value: number }[];
 }
+
+// export interface InboundLead {
+//   _id: string;
+//   client_name: string;
+//   client_email: string;
+//   client_phone: string;
+//   project_description: string;
+//   roomColors?: Record<string, string>;
+//   conversion_source:
+//     | "DESIGN_FEEDBACK"
+//     | "CLIENT_POPUP"
+//     | "POPUP_CAPTURE"
+//     | "OTHER";
+//   created_at: string;
+//   isLocked: boolean;
+// }
+export interface InboundLead {
+  id: number;
+  client_name: string;
+  client_email: string;
+  client_phone: string | null;
+  project_description: string;
+  conversion_source: string;
+  created_at: string;
+  isLocked?: boolean;
+  roomColors?: Record<string, string> | null;
+}

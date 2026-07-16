@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAlert } from "@/context/AlertContext";
 import { StepOnboarding } from "@/components/ui/StepOnboarding";
 import { OnboardingStep } from "@/types/index";
+import { ClientInquiryCard } from "@/components/ui/ClientInquiryCard";
 
 interface DashboardStats {
   profileViews: number;
@@ -47,6 +48,10 @@ interface ProfileCompletenessCheck {
   nudgeText: string;
 }
 
+
+/* ==========================================================
+   MAIN PAINTER DASHBOARD PAGE
+   ========================================================== */
 export default function PainterDashboardPage() {
   const { user, accessToken, updateUser } = useAuth();
   const { showToast } = useAlert();
@@ -115,7 +120,7 @@ export default function PainterDashboardPage() {
           });
         }
 
-        // Fetch client job requests and 3D feedback from /api/leads/me
+        // Fetch client job requests and 3D feedback
         const leadsRes = await fetch(`${BACKEND_API_URL}/api/leads/me`, {
           method: "GET",
           headers: {
@@ -140,10 +145,13 @@ export default function PainterDashboardPage() {
               meta = item.meta_tracking_data as Record<string, unknown>;
             }
 
+            // Fallback: Check metadata if item.email is empty or general fallback
+            const resolvedEmail = item.email || (meta.email as string) || (meta.clientEmail as string) || "client@paintit.app";
+
             return {
               id: item.id,
               client_name: (meta.clientName as string) || item.email?.split("@")[0] || "Interested Client",
-              client_email: item.email,
+              client_email: resolvedEmail,
               client_phone: (meta.phone as string) || null,
               project_description:
                 (meta.message as string) ||
@@ -256,7 +264,7 @@ export default function PainterDashboardPage() {
             <h1 className="text-base font-black text-neutral-100">
               Welcome, <span className="text-emerald-400">{displayFirstName}</span>
             </h1>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Track your page traffic and client messages.</p>
+            <p className="text-[11px] text-neutral-500 mt-0.5 font-medium">Track your page traffic and client messages.</p>
           </div>
         </div>
         <span className="text-[9px] bg-neutral-900 border border-neutral-800 px-2 py-1 rounded-md text-neutral-400 font-bold uppercase tracking-wider select-none">
@@ -360,7 +368,7 @@ export default function PainterDashboardPage() {
               <a href="/portfolio" className="flex-1 p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-center text-xs font-bold text-neutral-300 hover:text-emerald-400 hover:border-emerald-500/20 transition-all">
                 📁 Manage Work Photos
               </a>
-              <a href="/designs" className="flex-1 p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-center text-xs font-bold text-neutral-300 hover:text-emerald-400 hover:border-emerald-500/20 transition-all">
+              <a href="/workspace" className="flex-1 p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-center text-xs font-bold text-neutral-300 hover:text-emerald-400 hover:border-emerald-500/20 transition-all">
                 🎨 Open 3D Canvas
               </a>
               <button
@@ -387,7 +395,7 @@ export default function PainterDashboardPage() {
               <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-wider text-neutral-100">Customer Messages & 3D Revisions</h3>
-                  <p className="text-[11px] text-neutral-500 mt-0.5">Job requests, notes, and color feedback sent by clients.</p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5 font-medium">Job requests, notes, and color feedback sent by clients.</p>
                 </div>
                 <span className="text-[10px] bg-neutral-900 border border-neutral-800 px-2.5 py-0.5 rounded-full text-neutral-400 font-bold select-none">
                   {leads.length} Inquiries
@@ -400,72 +408,19 @@ export default function PainterDashboardPage() {
                   <p className="text-[11px] text-neutral-700">Share your business page link on WhatsApp to collect customer requests.</p>
                 </div>
               ) : (
-                <div className="space-y-2.5 max-h-[48vh] overflow-y-auto pr-1">
-                  {leads.map((lead) => {
-                    const is3DFeedback = lead.conversion_source === "DESIGN_FEEDBACK";
-                    const isPopupLead = lead.conversion_source === "CLIENT_POPUP" || lead.conversion_source === "POPUP_CAPTURE";
-
-                    return (
-                      <div
-                        key={lead.id}
-                        className="p-4 bg-neutral-900/40 border border-neutral-900 rounded-xl space-y-2 transition-colors hover:bg-neutral-900/70"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-black tracking-tight text-neutral-200">
-                              {lead.client_name || "Interested Homeowner"}
-                            </span>
-                            <span className={`text-[9px] uppercase tracking-widest border px-1.5 py-0.5 rounded font-bold ${is3DFeedback
-                                ? "bg-cyan-950/40 border-cyan-800/60 text-cyan-400"
-                                : isPopupLead
-                                  ? "bg-emerald-950/30 border-emerald-900/50 text-emerald-400"
-                                  : "bg-neutral-950 border-neutral-850 text-neutral-500"
-                              }`}>
-                              {is3DFeedback ? "🎨 3D Color Selection" : isPopupLead ? "🎯 Subscriber" : "💼 Job Request"}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-neutral-500 font-medium">
-                            {new Date(lead.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                          </span>
-                        </div>
-
-                        <p className="text-[11px] text-neutral-300 leading-relaxed bg-black/40 p-3 rounded-lg border border-neutral-900/60 font-medium">
-                          {lead.project_description}
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] border-t border-neutral-900/60 mt-2">
-                          {lead.isLocked || !isPlanQualified ? (
-                            <span className="text-neutral-500 font-bold flex items-center gap-1 select-none">
-                              🔒 Upgrade your account plan to unlock this client&apos;s phone number.
-                            </span>
-                          ) : (
-                            <>
-                              <span className="text-neutral-400 font-medium">Email: <span className="select-all text-neutral-300 font-mono">{lead.client_email}</span></span>
-                              {lead.client_phone && !isPopupLead && (
-                                <a
-                                  href={`https://wa.me/${lead.client_phone.replace(/\s+/g, '')}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-emerald-400 font-bold hover:underline flex items-center gap-0.5"
-                                >
-                                  💬 Chat on WhatsApp: {lead.client_phone}
-                                </a>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+                  {leads.map((lead) => (
+                    <ClientInquiryCard key={lead.id} lead={lead} isPlanQualified={isPlanQualified} />
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Right Column: Mini Project Summary Status Tracker Module */}
+            {/* Right Column: Mini Gallery Stats */}
             <div className="bg-neutral-950 border border-neutral-900 rounded-2xl p-5 space-y-4 shadow-xl h-fit">
               <div className="border-b border-neutral-900 pb-3">
                 <h3 className="text-xs font-black uppercase tracking-wider text-neutral-100">Gallery Stats</h3>
-                <p className="text-[11px] text-neutral-500 mt-0.5">Your catalog items currently live on your page.</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5 font-medium">Your catalog items currently live on your page.</p>
               </div>
 
               <div className="space-y-3">
@@ -477,10 +432,6 @@ export default function PainterDashboardPage() {
                 <div className="flex items-center justify-between p-3 bg-neutral-900/30 border border-neutral-900 rounded-xl">
                   <span className="text-xs text-neutral-400 font-medium">Uploaded Photos</span>
                   <span className="text-xs font-black text-emerald-400">{contentMetrics.totalImages} Photos</span>
-                </div>
-
-                <div className="p-3.5 bg-neutral-900/20 border border-neutral-900 rounded-xl text-[10px] text-neutral-500 leading-relaxed">
-                  💡 <span className="text-neutral-400 font-bold">Tip:</span> Keeping your gallery updated with clean work photos helps you attract more local client orders.
                 </div>
 
                 <a
