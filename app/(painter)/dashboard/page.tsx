@@ -375,7 +375,7 @@ export default function PainterDashboardPage() {
                 type="button"
                 onClick={() => {
                   const activeUserId = user?.id || user?._id;
-                  const profileLink = `${window.location.origin}/view/${activeUserId}`;
+                  const profileLink = `${window.location.origin}/painter/${activeUserId}`;
                   navigator.clipboard.writeText(profileLink);
                   showToast({ message: "Your business link has been copied to your clipboard.", severity: "success" });
                 }}
