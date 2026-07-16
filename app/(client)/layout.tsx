@@ -14,7 +14,8 @@ export default function ClientGroupDashboardLayout({ children }: { children: Rea
   const coreNavigationTabs = [
     { name: "Design Hub", path: "/hub", icon: "🏠" },
     { name: "Explore Painters", path: "/search/painters", icon: "🔍" },
-    { name: "Visualizer Canvas", path: "/design", icon: "🎨" },
+    { name: "Explore 3D Designs", path: "/search/designs", icon: "🎨" },
+    // { name: "Visualizer Canvas", path: "/design", icon: "🎨" },
   ];
 
   // Dedicated single node configuration reference for profile settings

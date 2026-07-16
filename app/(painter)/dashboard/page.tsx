@@ -435,7 +435,7 @@ export default function PainterDashboardPage() {
                 </div>
 
                 <a
-                  href="/dashboard/portfolio"
+                  href="/portfolio"
                   className="block w-full py-2.5 bg-neutral-900 hover:bg-neutral-850 border border-neutral-850 text-center text-xs font-black uppercase tracking-wider rounded-xl transition-all mt-2 text-neutral-300"
                 >
                   Manage Photos

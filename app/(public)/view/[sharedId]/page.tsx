@@ -219,55 +219,249 @@ export default function PublicProfileAndConceptPage() {
     document.removeEventListener("touchend", stopDrag);
   };
 
+  // useEffect(() => {
+  //   if (!targetId) return;
+
+  //   const resolvePublicDataStream = async () => {
+  //     setIsLoading(true);
+  //     try {
+  //       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
+
+  //       // 🎯 STEP 1: Only check catalog if targetId is NOT a UUID (e.g. "tmpl_hostel_lux")
+  //       if (!isUuid) {
+  //         const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${targetId}`).catch(() => null);
+
+  //         if (catalogRes && catalogRes.ok) {
+  //           const templateData = await catalogRes.json();
+
+  //           setSharedConcept({
+  //             share_id: targetId,
+  //             shared_at: new Date().toISOString(),
+  //             design_name: templateData.title || "Master Architecture Concept",
+  //             room_data: templateData.default_room_data || {},
+  //             parent_template_name: templateData.title || "Master Architecture",
+  //             master_design_id: templateData.id,
+  //             painter_id: "system",
+  //             full_name: "PaintIt Catalog",
+  //             email: "studio@paintit.app",
+  //             bio: "Official PaintIt 3D Spatial Architecture Model.",
+  //             location: "Virtual Studio",
+  //             experience_years: 5,
+  //             skills: ["3D Visualization", "Spatial Design"],
+  //             avatar_url: "/logo.png",
+  //             phone_number: "",
+  //             model_url: templateData.model_url || "/models/selfcon.glb"
+  //           });
+
+  //           setRoomColors(templateData.default_room_data || {});
+
+  //           if (templateData.lighting_settings) {
+  //             setBulbs(
+  //               templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+  //                 ...light,
+  //                 name: `Bulb #${index + 1}`,
+  //                 enabled: light.visible !== undefined ? light.visible : true,
+  //                 visible: light.visible !== undefined ? light.visible : true
+  //               }))
+  //             );
+  //           }
+
+  //           if (templateData.camera_settings) {
+  //             setCameraConfig(templateData.camera_settings);
+  //           }
+
+  //           setIs3DConceptShare(true);
+  //           setIsLoading(false);
+  //           return;
+  //         }
+  //       }
+
+  //       // 🎯 STEP 2: Attempt to resolve targetId as a public Share Link (UUID share_id)
+  //       const conceptRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`).catch(() => null);
+
+  //       if (conceptRes && conceptRes.ok) {
+  //         const conceptBody = await conceptRes.json();
+  //         const conceptData = conceptBody.data as SharedDataPayload;
+  //         setSharedConcept(conceptData);
+  //         setRoomColors(conceptData.room_data || {});
+  //         setIs3DConceptShare(true);
+
+  //         const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
+  //         const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
+
+  //         if (templateRes && templateRes.ok) {
+  //           const templateData = await templateRes.json();
+
+  //           if (templateData.lighting_settings) {
+  //             setBulbs(
+  //               templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+  //                 ...light,
+  //                 name: `Bulb #${index + 1}`,
+  //                 enabled: light.visible !== undefined ? light.visible : true,
+  //                 visible: light.visible !== undefined ? light.visible : true
+  //               }))
+  //             );
+  //           }
+  //           if (templateData.camera_settings) {
+  //             setCameraConfig(templateData.camera_settings);
+  //           }
+  //         }
+  //         setIsLoading(false);
+  //         return;
+  //       }
+
+  //       // 🎯 STEP 3: Fallback - Treat targetId as a Painter User ID
+  //       const [profileRes, conceptsRes] = await Promise.all([
+  //         fetch(`${BACKEND_API_URL}/api/profile/${targetId}`).catch(() => null),
+  //         fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`).catch(() => null)
+  //       ]);
+
+  //       if (profileRes && profileRes.ok) {
+  //         const profileData = await profileRes.json();
+  //         setProfile(profileData.profile || null);
+  //       }
+  //       if (conceptsRes && conceptsRes.ok) {
+  //         const conceptsData = await conceptsRes.json();
+  //         setConcepts3D(conceptsData.visualizations || []);
+  //       }
+  //     } catch (err) {
+  //       console.error("Aggregation error on public stream:", err);
+  //     } finally {
+  //       setIsLoading(false);
+  //     }
+  //   };
+
+  //   resolvePublicDataStream();
+  // }, [targetId, BACKEND_API_URL]);
+
   useEffect(() => {
     if (!targetId) return;
+    const isSubscribed = true;
 
     const resolvePublicDataStream = async () => {
       setIsLoading(true);
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
 
-        // 🎯 STEP 1: Only check catalog if targetId is NOT a UUID (e.g. "tmpl_hostel_lux")
-        if (!isUuid) {
-          const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${targetId}`).catch(() => null);
+        // 🎯 STEP 1: If non-UUID string, check catalog templates (e.g., tmpl_hostel_lux)
+        // if (!isUuid) {
+        //   const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${targetId}`).catch(() => null);
 
-          if (catalogRes && catalogRes.ok) {
-            const templateData = await catalogRes.json();
+        //   if (catalogRes && catalogRes.ok) {
+        //     const templateData = await catalogRes.json();
+
+        //     setSharedConcept({
+        //       share_id: targetId,
+        //       shared_at: new Date().toISOString(),
+        //       design_name: templateData.title || "Master Architecture Concept",
+        //       room_data: templateData.default_room_data || {},
+        //       parent_template_name: templateData.title || "Master Architecture",
+        //       master_design_id: templateData.id,
+        //       painter_id: "system",
+        //       full_name: "PaintIt Catalog",
+        //       email: "studio@paintit.app",
+        //       bio: "Official PaintIt 3D Spatial Architecture Model.",
+        //       location: "Virtual Studio",
+        //       experience_years: 5,
+        //       skills: ["3D Visualization"],
+        //       avatar_url: "/logo.png",
+        //       phone_number: "",
+        //       model_url: templateData.model_url || "/models/selfcon.glb"
+        //     });
+
+        //     setRoomColors(templateData.default_room_data || {});
+        //     if (templateData.lighting_settings) {
+        //       setBulbs(
+        //         templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+        //           ...light,
+        //           name: `Bulb #${index + 1}`,
+        //           enabled: light.visible !== undefined ? light.visible : true,
+        //           visible: light.visible !== undefined ? light.visible : true
+        //         }))
+        //       );
+        //     }
+        //     if (templateData.camera_settings) setCameraConfig(templateData.camera_settings);
+
+        //     setIs3DConceptShare(true);
+        //     setIsLoading(false);
+        //     return;
+        //   }
+        // }
+        // 🎯 3. Direct Client Hub Saved Remix Lookup (`visualizations` table)
+        if (isUuid) {
+          const directVisRes = await fetch(`${BACKEND_API_URL}/api/visualizations/public/${targetId}`).catch(() => null);
+
+          if (directVisRes && directVisRes.ok) {
+            const visBody = await directVisRes.json();
+            if (!isSubscribed) return;
+
+            const vis = visBody.visualization;
+
+            // Safe parsing helper
+            const safeParse = (data: unknown, fallback: unknown) => {
+              if (!data) return fallback;
+              if (typeof data === "string") {
+                try { return JSON.parse(data); } catch { return fallback; }
+              }
+              return data;
+            };
+
+            const parsedRoomData = safeParse(vis.room_data, {});
+            const parsedLightData = safeParse(vis.light_data, []);
+            const parsedCameraData = safeParse(vis.camera_data, null);
 
             setSharedConcept({
-              share_id: targetId,
-              shared_at: new Date().toISOString(),
-              design_name: templateData.title || "Master Architecture Concept",
-              room_data: templateData.default_room_data || {},
-              parent_template_name: templateData.title || "Master Architecture",
-              master_design_id: templateData.id,
-              painter_id: "system",
-              full_name: "PaintIt Catalog",
-              email: "studio@paintit.app",
-              bio: "Official PaintIt 3D Spatial Architecture Model.",
-              location: "Virtual Studio",
-              experience_years: 5,
-              skills: ["3D Visualization", "Spatial Design"],
-              avatar_url: "/logo.png",
-              phone_number: "",
-              model_url: templateData.model_url || "/models/selfcon.glb"
+              share_id: vis.id,
+              shared_at: vis.created_at || new Date().toISOString(),
+              design_name: vis.name || "Saved Remix Concept",
+              room_data: parsedRoomData,
+              parent_template_name: vis.parent_template_name || "Custom Layout",
+              master_design_id: vis.master_design_id || "tmpl_hostel_lux",
+              painter_id: vis.user_id || "client",
+              full_name: "Remixed Design Presentation",
+              email: "",
+              bio: null,
+              location: null,
+              experience_years: 0,
+              skills: [],
+              avatar_url: null,
+              phone_number: null,
+              model_url: "/models/selfcon.glb"
             });
 
-            setRoomColors(templateData.default_room_data || {});
+            setRoomColors(parsedRoomData);
 
-            if (templateData.lighting_settings) {
-              setBulbs(
-                templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+            // 💡 Hydrate saved bulbs OR fetch template default lights
+            const templateToFetch = vis.master_design_id || "tmpl_hostel_lux";
+            const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
+
+            let templateBulbs: BulbState[] = [];
+            if (templateRes && templateRes.ok) {
+              const templateData = await templateRes.json();
+
+              if (templateData.lighting_settings) {
+                templateBulbs = templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
                   ...light,
                   name: `Bulb #${index + 1}`,
                   enabled: light.visible !== undefined ? light.visible : true,
                   visible: light.visible !== undefined ? light.visible : true
-                }))
-              );
+                }));
+              }
+
+              if (!parsedCameraData && templateData.camera_settings) {
+                setCameraConfig(templateData.camera_settings);
+              }
             }
 
-            if (templateData.camera_settings) {
-              setCameraConfig(templateData.camera_settings);
+            // Prefer user's customized bulb settings if present, otherwise fall back to template default bulbs
+            if (Array.isArray(parsedLightData) && parsedLightData.length > 0) {
+              setBulbs(parsedLightData);
+            } else if (templateBulbs.length > 0) {
+              setBulbs(templateBulbs);
+            }
+
+            if (parsedCameraData) {
+              setCameraConfig(parsedCameraData);
             }
 
             setIs3DConceptShare(true);
@@ -276,11 +470,11 @@ export default function PublicProfileAndConceptPage() {
           }
         }
 
-        // 🎯 STEP 2: Attempt to resolve targetId as a public Share Link (UUID share_id)
-        const conceptRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`).catch(() => null);
+        // 🎯 STEP 2: Check Share Links table (`shared_visualizations`)
+        const shareRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`).catch(() => null);
 
-        if (conceptRes && conceptRes.ok) {
-          const conceptBody = await conceptRes.json();
+        if (shareRes && shareRes.ok) {
+          const conceptBody = await shareRes.json();
           const conceptData = conceptBody.data as SharedDataPayload;
           setSharedConcept(conceptData);
           setRoomColors(conceptData.room_data || {});
@@ -291,7 +485,6 @@ export default function PublicProfileAndConceptPage() {
 
           if (templateRes && templateRes.ok) {
             const templateData = await templateRes.json();
-
             if (templateData.lighting_settings) {
               setBulbs(
                 templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
@@ -302,15 +495,50 @@ export default function PublicProfileAndConceptPage() {
                 }))
               );
             }
-            if (templateData.camera_settings) {
-              setCameraConfig(templateData.camera_settings);
-            }
+            if (templateData.camera_settings) setCameraConfig(templateData.camera_settings);
           }
           setIsLoading(false);
           return;
         }
 
-        // 🎯 STEP 3: Fallback - Treat targetId as a Painter User ID
+        // 🎯 STEP 3: DIRECT CLIENT HUB LOOKUP (`visualizations` table by UUID)
+        const directVisRes = await fetch(`${BACKEND_API_URL}/api/visualizations/public/${targetId}`).catch(() => null);
+
+        if (directVisRes && directVisRes.ok) {
+          const visBody = await directVisRes.json();
+          const vis = visBody.visualization;
+
+          let parsedRoomData = vis.room_data || {};
+          if (typeof parsedRoomData === "string") {
+            try { parsedRoomData = JSON.parse(parsedRoomData); } catch { parsedRoomData = {}; }
+          }
+
+          setSharedConcept({
+            share_id: vis.id,
+            shared_at: vis.created_at || new Date().toISOString(),
+            design_name: vis.name || "Saved Remix Concept",
+            room_data: parsedRoomData,
+            parent_template_name: vis.parent_template_name || "Custom Layout",
+            master_design_id: vis.master_design_id || "tmpl_hostel_lux",
+            painter_id: vis.user_id || "client",
+            full_name: "Remixed Design Presentation",
+            email: "",
+            bio: null,
+            location: null,
+            experience_years: 0,
+            skills: [],
+            avatar_url: null,
+            phone_number: null,
+            model_url: "/models/selfcon.glb"
+          });
+
+          setRoomColors(parsedRoomData);
+          setIs3DConceptShare(true);
+          setIsLoading(false);
+          return;
+        }
+
+        // 🎯 STEP 4: Fallback - Painter Profile Lookup
         const [profileRes, conceptsRes] = await Promise.all([
           fetch(`${BACKEND_API_URL}/api/profile/${targetId}`).catch(() => null),
           fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`).catch(() => null)
@@ -366,15 +594,105 @@ export default function PublicProfileAndConceptPage() {
     };
   }, []);
 
+  // const handleSaveToClientHub = async () => {
+  //   if (!accessToken || !user) {
+  //     showToast({ message: "Please create an account or log in to clone this design scheme.", severity: "error" });
+  //     router.push("/login");
+  //     return;
+  //   }
+
+  //   // 🎯 FIX: Case-insensitive check & fallback for default registered clients
+  //   const userRole = ((user as { role?: string })?.role || "client").toLowerCase();
+
+  //   if (userRole !== "client" && userRole !== "homeowner") {
+  //     showToast({ message: "Only client accounts can import designs into their Design Hub.", severity: "error" });
+  //     return;
+  //   }
+
+  //   if (!sharedConcept) return;
+
+  //   setImporting(true);
+  //   try {
+  //     const response = await fetch(`${BACKEND_API_URL}/api/visualizations`, {
+  //       method: "POST",
+  //       headers: {
+  //         "Authorization": `Bearer ${accessToken}`,
+  //         "Content-Type": "application/json"
+  //       },
+  //       body: JSON.stringify({
+  //         name: `${sharedConcept.design_name} (Remixed)`,
+  //         roomData: roomColors,
+  //         room_data: roomColors,
+  //         light_data: bulbs,
+  //         camera_data: cameraConfig,
+  //         masterDesignId: sharedConcept.master_design_id || "tmpl_living_lux"
+  //       })
+  //     });
+
+  //     if (response.ok) {
+  //       showToast({ message: "Design cloned perfectly! Redirecting to your Hub layout...", severity: "success" });
+  //       setTimeout(() => { router.push("/hub"); }, 1500);
+  //     } else {
+  //       const errorData = await response.json().catch(() => ({}));
+  //       showToast({ message: errorData.message || "Failed to clone design asset.", severity: "error" });
+  //     }
+  //   } catch (err) {
+  //     console.error(err);
+  //     showToast({ message: "Could not import design asset parameters.", severity: "error" });
+  //   } finally {
+  //     setImporting(false);
+  //   }
+  // };
+
   const handleSaveToClientHub = async () => {
-    if (!accessToken || !user) {
-      showToast({ message: "Please create an account or log in to clone this design scheme.", severity: "error" });
+    // 1. READ TOKEN FROM ALL POSSIBLE LOCALSTORAGE KEYS
+    const activeToken =
+      accessToken ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem("paintit_access_token") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("accessToken")
+        : null);
+
+    if (!activeToken) {
+      showToast({
+        message: "Please create an account or log in to clone this design scheme.",
+        severity: "error",
+      });
       router.push("/login");
       return;
     }
 
-    if ((user as { role?: string })?.role !== "client") {
-      showToast({ message: "Only client accounts can import designs into their Design Hub.", severity: "error" });
+    // 2. READ AND PARSE USER DATA DIRECTLY FROM LOCALSTORAGE IF CONTEXT IS EMPTY
+    let currentUser = user as { role?: string } | null;
+
+    if (!currentUser && typeof window !== "undefined") {
+      const rawUserData = localStorage.getItem("paintit_user_data");
+      if (rawUserData) {
+        try {
+          currentUser = JSON.parse(rawUserData);
+        } catch {
+          currentUser = null;
+        }
+      }
+    }
+
+    // 3. FLEXIBLE ROLE VALIDATION (Case-insensitive & handles "client", "homeowner", etc.)
+    const rawRole = currentUser?.role || "client";
+    const normalizedRole = String(rawRole).toLowerCase().trim();
+
+    // Allow any non-painter account or client variant
+    const isClientRole =
+      normalizedRole.includes("client") ||
+      normalizedRole.includes("homeowner") ||
+      normalizedRole.includes("customer") ||
+      normalizedRole === "user";
+
+    if (!isClientRole && normalizedRole === "painter") {
+      showToast({
+        message: "Only client accounts can import designs into their Design Hub.",
+        severity: "error",
+      });
       return;
     }
 
@@ -385,8 +703,8 @@ export default function PublicProfileAndConceptPage() {
       const response = await fetch(`${BACKEND_API_URL}/api/visualizations`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
+          Authorization: `Bearer ${activeToken}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           name: `${sharedConcept.design_name} (Remixed)`,
@@ -394,17 +712,31 @@ export default function PublicProfileAndConceptPage() {
           room_data: roomColors,
           light_data: bulbs,
           camera_data: cameraConfig,
-          masterDesignId: sharedConcept.master_design_id || "tmpl_living_lux"
-        })
+          masterDesignId: sharedConcept.master_design_id || targetId || "tmpl_living_lux",
+        }),
       });
 
       if (response.ok) {
-        showToast({ message: "Design cloned perfectly! Redirecting to your Hub layout...", severity: "success" });
-        setTimeout(() => { router.push("/hub"); }, 1500);
+        showToast({
+          message: "Design cloned perfectly! Redirecting to your Hub layout...",
+          severity: "success",
+        });
+        setTimeout(() => {
+          router.push("/hub");
+        }, 1200);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        showToast({
+          message: errorData.message || errorData.error || "Failed to clone design asset.",
+          severity: "error",
+        });
       }
     } catch (err) {
       console.error(err);
-      showToast({ message: "Could not import design asset parameters.", severity: "error" });
+      showToast({
+        message: "Could not import design asset parameters.",
+        severity: "error",
+      });
     } finally {
       setImporting(false);
     }
