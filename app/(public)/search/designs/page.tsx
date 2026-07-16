@@ -1,70 +1,60 @@
-// app/(public)/search/design/page.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 
-interface DesignTemplate {
+interface CatalogTemplate {
   id: string;
   title: string;
-  category: string;
-  thumbnail_url: string;
-  polygons_count: string;
-  lighting_setup: string;
-  popularity_score: number;
+  model_url?: string;
+  category?: string;
+  plan_type?: string;
+  thumbnail_icon?: string;
+  polygons_count?: string;
+  lighting_setup?: string;
 }
 
 export default function PublicDesignTemplatesDirectoryPage() {
+  const [templates, setTemplates] = useState<CatalogTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
 
-  // Hardcoded premium mock architecture layers matching your MVP vision
-  const availableTemplates: DesignTemplate[] = [
-    {
-      id: "tmpl_living_lux",
-      title: "Luxury Minimalist Living Room",
-      category: "INTERIOR",
-      thumbnail_url: "🛋️",
-      polygons_count: "42k Polys",
-      lighting_setup: "Cinematic Day/Studio",
-      popularity_score: 98
-    },
-    {
-      id: "tmpl_bed_nordic",
-      title: "Nordic Executive Bedroom Layout",
-      category: "INTERIOR",
-      thumbnail_url: "🛏️",
-      polygons_count: "29k Polys",
-      lighting_setup: "Soft Ambient Evening",
-      popularity_score: 89
-    },
-    {
-      id: "tmpl_office_corp",
-      title: "Corporate Creative Studio Office",
-      category: "COMMERCIAL",
-      thumbnail_url: "🏢",
-      polygons_count: "56k Polys",
-      lighting_setup: "High-Key Daylight Panels",
-      popularity_score: 92
-    },
-    {
-      id: "tmpl_accent_cinematic",
-      title: "POP Screeding Accent Geometric Wall",
-      category: "ACCENT",
-      thumbnail_url: "📐",
-      polygons_count: "12k Polys",
-      lighting_setup: "Directional Spotlights",
-      popularity_score: 95
-    }
-  ];
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-  const filteredTemplates = availableTemplates.filter((template) => {
-    const matchesSearch =
-      template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      template.lighting_setup.toLowerCase().includes(searchQuery.toLowerCase());
+  // 🎯 FETCH DYNAMIC CATALOG DIRECTLY FROM BACKEND API
+  useEffect(() => {
+    let isMounted = true;
 
-    const matchesCategory =
-      selectedCategory === "ALL" || template.category === selectedCategory;
+    const fetchCatalog = async () => {
+      try {
+        const res = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.catalog) {
+            setTemplates(data.catalog);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load catalog templates:", err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, [BACKEND_API_URL]);
+
+  const filteredTemplates = templates.filter((template) => {
+    const titleMatch = (template.title || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const lightingMatch = (template.lighting_setup || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = titleMatch || lightingMatch;
+
+    const templateCategory = (template.category || "INTERIOR").toUpperCase();
+    const matchesCategory = selectedCategory === "ALL" || templateCategory === selectedCategory;
 
     return matchesSearch && matchesCategory;
   });
@@ -75,9 +65,9 @@ export default function PublicDesignTemplatesDirectoryPage() {
       {/* 🏷️ CONTROL LAYER: HEADERS & PARAMETER FILTERS */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-neutral-900 pb-6">
         <div>
-          <h1 className="text-xl font-black uppercase tracking-tight text-neutral-100">3D Workspace Templates</h1>
+          <h1 className="text-xl font-black uppercase tracking-tight text-neutral-100">3D Architecture Catalog</h1>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Select an interactive 3D model architecture scene to experiment with dynamic texture swatches and color schemes.
+            Explore interactive 3D room concepts and preview color swatches right in your browser.
           </p>
         </div>
 
@@ -89,8 +79,8 @@ export default function PublicDesignTemplatesDirectoryPage() {
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all w-full sm:w-auto text-center ${selectedCategory === cat
-                  ? "bg-neutral-900 text-emerald-400 border border-neutral-800"
-                  : "text-neutral-500 hover:text-neutral-300"
+                    ? "bg-neutral-900 text-emerald-400 border border-neutral-800"
+                    : "text-neutral-500 hover:text-neutral-300"
                   }`}
               >
                 {cat}
@@ -108,8 +98,15 @@ export default function PublicDesignTemplatesDirectoryPage() {
         </div>
       </div>
 
-      {/* 📦 GRID CONTAINER LAYER */}
-      {filteredTemplates.length === 0 ? (
+      {/* 📦 GRID CONTAINER / LOADING STATES */}
+      {isLoading ? (
+        <div className="min-h-[40vh] w-full flex flex-col items-center justify-center gap-3">
+          <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-[10px] text-neutral-500 font-bold tracking-widest uppercase">
+            Loading Catalog Concepts...
+          </span>
+        </div>
+      ) : filteredTemplates.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-neutral-900 rounded-3xl max-w-md mx-auto bg-neutral-950/10 space-y-3">
           <span className="text-xl">📐</span>
           <h3 className="text-xs font-black uppercase tracking-wide text-neutral-300">No Environment Matches</h3>
@@ -129,16 +126,16 @@ export default function PublicDesignTemplatesDirectoryPage() {
                 <div className="w-full h-40 bg-neutral-900 border border-neutral-850 rounded-xl flex flex-col items-center justify-center relative overflow-hidden group-hover:border-neutral-700 transition-colors shadow-inner select-none">
                   <div className="absolute top-0 right-0 p-2.5">
                     <span className="text-[9px] font-mono bg-neutral-950/80 backdrop-blur-md border border-neutral-800 text-neutral-400 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-                      {template.category}
+                      {template.category || "INTERIOR"}
                     </span>
                   </div>
 
                   <span className="text-4xl group-hover:scale-110 transition-transform duration-300 filter drop-shadow-md">
-                    {template.thumbnail_url}
+                    {template.thumbnail_icon || "🛋️"}
                   </span>
 
                   <span className="text-[9px] font-mono tracking-widest uppercase font-black text-neutral-600 mt-3 block">
-                    [ Click to Initialize Canvas ]
+                    [ Click to Launch 3D View ]
                   </span>
                 </div>
 
@@ -150,22 +147,22 @@ export default function PublicDesignTemplatesDirectoryPage() {
                   {/* Performance Specs & Parameters */}
                   <div className="flex items-center gap-2 mt-2 text-[10px] font-bold text-neutral-500 select-none">
                     <span className="px-2 py-0.5 bg-neutral-900 border border-neutral-850 rounded-md">
-                      ⚙️ {template.polygons_count}
+                      ⚙️ {template.polygons_count || "Standard Mesh"}
                     </span>
                     <span className="px-2 py-0.5 bg-neutral-900 border border-neutral-850 rounded-md">
-                      💡 {template.lighting_setup}
+                      💡 {template.lighting_setup || "Dynamic Point Lights"}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Viewport Initializer Core Link Trigger */}
+              {/* 🎯 ROUTE DIRECTLY TO PUBLIC CLIENT VIEW PAGE */}
               <div className="pt-5 mt-4 border-t border-neutral-900/60">
                 <Link
-                  href={`/workspace?template=${template.id}`}
+                  href={`/view/${template.id}`}
                   className="block w-full py-2.5 bg-neutral-900 hover:bg-emerald-500 border border-neutral-850 hover:border-emerald-500 text-center text-xs font-black uppercase tracking-wider text-neutral-300 hover:text-black rounded-xl transition-all shadow-inner"
                 >
-                  Load 3D Environment Studio ➔
+                  Inspect 3D Layout ➔
                 </Link>
               </div>
             </div>
