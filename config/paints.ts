@@ -58,16 +58,52 @@ export const REAL_PAINTS_CATALOG: RealPaint[] = [
     code: "#FFFFFF",
   },
   {
-    id: "p-sw-06",
+    id: "p-sw-10",
     brand: "Benjamin Moore",
     name: "Sand Beige",
     code: "#D2B995",
   },
   {
-    id: "p-sw-06",
+    id: "p-sw-11",
     brand: "Benjamin Moore",
     name: "Walnut Brown",
     code: "#593C2A",
+  },
+  {
+    id: "p-sw-12",
+    brand: "Benjamin Moore",
+    name: "Light Ash Grey",
+    code: "#D9DCDA",
+  },
+  {
+    id: "p-sw-13",
+    brand: "Benjamin Moore",
+    name: "Midnight Blue",
+    code: "#253447",
+  },
+  {
+    id: "p-sw-14",
+    brand: "Benjamin Moore",
+    name: "Pearl White",
+    code: "#F3F1E9",
+  },
+  {
+    id: "p-sw-15",
+    brand: "Benjamin Moore",
+    name: "Deep Olive Green",
+    code: "#3F4A38",
+  },
+  {
+    id: "p-sw-16",
+    brand: "Benjamin Moore",
+    name: "Soft Greige",
+    code: "#D8D0C4",
+  },
+  {
+    id: "p-sw-17",
+    brand: "Benjamin Moore",
+    name: "Espresso Brown",
+    code: "#4A3028",
   },
 ];
 
