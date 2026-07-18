@@ -2,7 +2,7 @@
 
 export interface RealPaint {
   id: string;
-  brand: "Dulux" | "Sherwin-Williams" | "Benjamin Moore" | "Caparol";
+  brand?: "Dulux" | "Sherwin-Williams" | "Benjamin Moore" | "Caparol";
   name: string;
   code: string; // Hexadecimal color code
 }
@@ -33,21 +33,57 @@ export const REAL_PAINTS_CATALOG: RealPaint[] = [
     name: "Charcoal Black",
     code: "#37393D",
   },
+  {
+    id: "p-sw-06",
+    brand: "Benjamin Moore",
+    name: "Light Greige",
+    code: "#DDD8D2",
+  },
+  {
+    id: "p-sw-07",
+    brand: "Benjamin Moore",
+    name: "Deep Graphite",
+    code: "#4A4F56",
+  },
+  {
+    id: "p-sw-08",
+    brand: "Benjamin Moore",
+    name: "Satin Black",
+    code: "#1C1C1C",
+  },
+  {
+    id: "p-sw-09",
+    brand: "Benjamin Moore",
+    name: "Crisp White",
+    code: "#FFFFFF",
+  },
+  {
+    id: "p-sw-06",
+    brand: "Benjamin Moore",
+    name: "Sand Beige",
+    code: "#D2B995",
+  },
+  {
+    id: "p-sw-06",
+    brand: "Benjamin Moore",
+    name: "Walnut Brown",
+    code: "#593C2A",
+  },
 ];
 
-// Helper helper function to find metadata by hex color code
-export function findPaintMetadata(
-  hexCode: string,
-  customDecks: RealPaint[] = [],
-): { name: string; brand: string } {
-  const normalizedHex = hexCode.toUpperCase().trim();
+// // Helper helper function to find metadata by hex color code
+// export function findPaintMetadata(
+//   hexCode: string,
+//   customDecks: RealPaint[] = [],
+// ): { name: string; brand: string } {
+//   const normalizedHex = hexCode.toUpperCase().trim();
 
-  // Search custom painter decks first, then fallback to global commercial decks
-  const matchedPaint =
-    customDecks.find((p) => p.code.toUpperCase() === normalizedHex) ||
-    REAL_PAINTS_CATALOG.find((p) => p.code.toUpperCase() === normalizedHex);
+//   // Search custom painter decks first, then fallback to global commercial decks
+//   const matchedPaint =
+//     customDecks.find((p) => p.code.toUpperCase() === normalizedHex) ||
+//     REAL_PAINTS_CATALOG.find((p) => p.code.toUpperCase() === normalizedHex);
 
-  return matchedPaint
-    ? { name: matchedPaint.name, brand: matchedPaint.brand }
-    : { name: "Custom Color Mix", brand: "Painter Palette" };
-}
+//   return matchedPaint
+//     ? { name: matchedPaint.name, brand: matchedPaint.brand }
+//     : { name: "Custom Color Mix", brand: "Painter Palette" };
+// }
