@@ -75,7 +75,7 @@ export default function PaintPicker({
       if (activeToken) {
         setIsSyncing(true);
         try {
-          const response = await fetch(`${BACKEND_API_URL}/api/custom-paints`, {
+          const response = await fetch(`${BACKEND_API_URL}/api/profile/custom-paints`, {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${activeToken}`,
