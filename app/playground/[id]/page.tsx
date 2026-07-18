@@ -16,6 +16,7 @@ import { DynamicLightInstance } from '@/types/index';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useAlert } from "@/context/AlertContext";
 import { useAuth } from "@/context/AuthContext";
+import { PaintFinishId } from '@/config/paintFinishes';
 
 type WorkspaceLightInstance = DynamicLightInstance & { visible?: boolean };
 
@@ -26,7 +27,7 @@ type MasterTemplateCatalogItem = {
   model_url?: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export default function DedicatedPlayground() {
   const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -35,6 +36,7 @@ export default function DedicatedPlayground() {
   const dynamicId = routeParams.id as string;
 
   const [activeSurface, setActiveSurface] = useState<string>('wallFront');
+  const [activeFinish, setActiveFinish] = useState<PaintFinishId>('EMULSION');
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
   const [gizmoMode, setGizmoMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
   const [cleanViewActive, setCleanViewActive] = useState<boolean>(false);
@@ -202,7 +204,7 @@ export default function DedicatedPlayground() {
         let premiumFlag = false;
 
         // Default fallback model path
-        let activeModelPath = "/models/model1.glb";
+        let activeModelPath = "/models/selfcon.glb";
 
         if (catalogRes.ok) {
           const catData = await catalogRes.json();
@@ -439,8 +441,9 @@ export default function DedicatedPlayground() {
 
           <Suspense fallback={null}>
             <StudioBlenderModelMesh
-              modelUrl="/models/selfcon.glb"
+              modelUrl={modelUrl}
               surfaceStates={roomColors}
+              activeFinish={activeFinish}
               onTargetSelect={(meshName: string) => {
                 if (!cleanViewActive && isAdmin) setActiveSurface(meshName);
               }}
@@ -478,6 +481,8 @@ export default function DedicatedPlayground() {
           onGizmoModeChange={setGizmoMode}
           currentColor={roomColors[activeSurface]}
           onColorChange={(color: string) => setRoomColors((prev) => ({ ...prev, [activeSurface]: color }))}
+          currentFinish={activeFinish}
+          onFinishChange={setActiveFinish}
           onAddLight={addNewLight}
           onSelectLight={(id) => {
             // 🔒 FIX: Temporarily intercept panel events to block async trace collisions

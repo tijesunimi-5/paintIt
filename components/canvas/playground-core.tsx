@@ -2,10 +2,12 @@
 
 import React, { useEffect, useMemo, useRef } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, useGLTF, Sky, TransformControls, useHelper } from '@react-three/drei';
+import { OrbitControls, useGLTF, Sky, TransformControls, useHelper, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTF, OrbitControls as OrbitControlsImpl, TransformControls as TransformControlsImpl } from 'three-stdlib';
 import { DynamicLightInstance } from '@/types/index';
+import { generateWallNormalMap } from '@/utils/generateWallNormalMaps';
+import { PAINT_FINISH_PRESETS, PaintFinishId } from '@/config/paintFinishes';
 
 interface GizmoProps {
   activeLight: DynamicLightInstance;
@@ -84,43 +86,133 @@ export function PlaygroundLighting({ isNight, showHelpers }: BaseLightingProps) 
   );
 }
 
-interface BlenderMeshProps { modelUrl: string; surfaceStates: Record<string, string>; onTargetSelect: (meshName: string) => void; }
-interface GLTFResult extends GLTF { nodes: Record<string, THREE.Object3D>; materials: Record<string, THREE.Material>; }
+interface BlenderMeshProps {
+  modelUrl: string;
+  surfaceStates: Record<string, string>;
+  activeFinish?: PaintFinishId;
+  onTargetSelect: (meshName: string) => void;
+}
 
-export function StudioBlenderModelMesh({ modelUrl, surfaceStates, onTargetSelect }: BlenderMeshProps) {
+type GLTFResult = GLTF & {
+  nodes: Record<string, THREE.Mesh>;
+  materials: Record<string, THREE.Material>;
+};
+
+const WALL_MAPPING: Record<string, string> = {
+  left: 'wallLeft',
+  right: 'wallRight',
+  back: 'wallBack',
+  front: 'wallFront',
+  roof: 'ceiling'
+};
+
+export function StudioBlenderModelMesh({
+  modelUrl,
+  surfaceStates,
+  activeFinish = 'EMULSION',
+  onTargetSelect
+}: BlenderMeshProps) {
   const { scene } = useGLTF(modelUrl) as unknown as GLTFResult;
+  const clonedScene = useMemo(() => {
+    const clone = scene.clone();
+    const hasInnerWalls = !!clone.getObjectByName('wallLeft');
+    if (hasInnerWalls) {
+      console.log("🛠️ [Studio Canvas] Preparing scene: interior walls detected. Hiding structural exterior walls.");
+      clone.traverse((node) => {
+        if (node instanceof THREE.Mesh) {
+          if (WALL_MAPPING[node.name]) {
+            node.visible = false;
+            console.log(`🚫 [Studio Canvas] Hid duplicate exterior wall: ${node.name}`);
+          }
+        }
+      });
+    }
+    return clone;
+  }, [scene]);
+  const wallNormalMap = useMemo(() => generateWallNormalMap(512, 512), []);
 
   useEffect(() => {
-    scene.traverse((node: THREE.Object3D) => {
+    if (!clonedScene) return;
+
+    console.log("🎨 [Studio Canvas] Traversing Scene for Paint Updates. surfaceStates:", surfaceStates);
+
+    const finishPreset = PAINT_FINISH_PRESETS[activeFinish] || PAINT_FINISH_PRESETS.EMULSION;
+    const { roughness, metalness, clearcoat, clearcoatRoughness, bumpScale, envMapIntensity } = finishPreset.materialProps;
+
+    clonedScene.traverse((node: THREE.Object3D) => {
       if (node instanceof THREE.Mesh) {
+        const meshName = node.name;
+        if (!node.visible) return; // Skip hidden duplicate exterior walls
+
         node.castShadow = true;
         node.receiveShadow = true;
-        if (node.material instanceof THREE.MeshStandardMaterial) {
-          const meshName = node.name;
-          if (surfaceStates[meshName]) node.material.color.set(surfaceStates[meshName]);
-          if (meshName === 'floor') {
-            if (!surfaceStates[meshName]) node.material.color.set('#f2f0ea');
+
+        const targetKey = WALL_MAPPING[meshName] || meshName;
+        const isWallSurface = targetKey.startsWith('wall');
+
+        if (isWallSurface && surfaceStates[targetKey]) {
+          console.log(`🖌️ [Studio Canvas] Painting ${meshName} (${targetKey}) -> ${surfaceStates[targetKey]}`);
+          // Upgrade to MeshPhysicalMaterial for clearcoat & sheen rendering
+          if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
+            const oldMat = node.material;
+            node.material = new THREE.MeshPhysicalMaterial({
+              color: oldMat.color,
+              map: oldMat.map || null,
+              side: THREE.DoubleSide,
+            });
+          }
+
+          const mat = node.material as THREE.MeshPhysicalMaterial;
+          mat.color.set(surfaceStates[targetKey]);
+          mat.side = THREE.DoubleSide;
+
+          // Apply finish sheen properties
+          mat.roughness = roughness;
+          mat.metalness = metalness;
+          mat.clearcoat = clearcoat || 0;
+          mat.clearcoatRoughness = clearcoatRoughness || 0.1;
+          mat.envMapIntensity = envMapIntensity;
+
+          // Apply drywall plaster bump map
+          mat.bumpMap = wallNormalMap;
+          mat.bumpScale = bumpScale;
+
+          // Enable polygon offset to prevent overlapping mesh z-fighting
+          mat.polygonOffset = true;
+          mat.polygonOffsetFactor = -1;
+          mat.polygonOffsetUnits = -1;
+
+          mat.needsUpdate = true;
+        } else if (node.material instanceof THREE.MeshStandardMaterial) {
+          // Clone standard materials (floor/ceiling/furniture) to prevent bleeding
+          node.material = node.material.clone();
+          if (surfaceStates[targetKey]) node.material.color.set(surfaceStates[targetKey]);
+          
+          if (targetKey === 'floor') {
+            if (!surfaceStates[targetKey]) node.material.color.set('#f2f0ea');
             node.material.roughness = 0.12;
-          } else if (meshName === 'ceiling') {
-            if (!surfaceStates[meshName]) node.material.color.set('#ffffff');
+          } else if (targetKey === 'ceiling') {
+            if (!surfaceStates[targetKey]) node.material.color.set('#ffffff');
             node.material.roughness = 0.95;
-          } else if (meshName.startsWith('wall') || meshName === 'toilet') {
-            node.material.roughness = 0.88;
           }
           node.material.needsUpdate = true;
         }
       }
     });
-  }, [scene, surfaceStates]);
+  }, [clonedScene, surfaceStates, activeFinish, wallNormalMap]);
 
   return (
     <primitive
-      object={scene}
+      object={clonedScene}
       onPointerDown={(e: ThreeEvent<PointerEvent>) => {
         e.stopPropagation();
         if (e.object instanceof THREE.Mesh) {
-          const targetName = e.object.name || e.object.parent?.name;
-          if (targetName) onTargetSelect(targetName);
+          const rawName = e.object.name || e.object.parent?.name;
+          if (rawName) {
+            const targetName = WALL_MAPPING[rawName] || rawName;
+            console.log("🎯 [Studio Canvas] Clicked Mesh:", rawName, "-> mapped to:", targetName, "Mesh Visible:", e.object.visible);
+            onTargetSelect(targetName);
+          }
         }
       }}
     />

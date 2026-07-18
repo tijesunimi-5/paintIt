@@ -14,12 +14,31 @@ import { useAlert } from "@/context/AlertContext";
 import PaintPicker, { CustomColor } from "@/components/canvas/ClientPaintPicker";
 import LightControls, { BulbState } from "@/components/canvas/LightControls";
 import { DBRawLight } from "../../workspace/page";
+import { PAINT_FINISH_PRESETS, PaintFinishId } from "@/config/paintFinishes";
+import { generateWallNormalMap } from "@/utils/generateWallNormalMaps";
+
+// 🎨 REAL-WORLD COMMERCIALLY ACCURATE PAINTS REGISTRY
+export interface RealPaint {
+  id: string;
+  brand: 'Dulux' | 'Sherwin-Williams' | 'Benjamin Moore' | 'Caparol';
+  name: string;
+  code: string;
+}
+
+export const REAL_PAINTS_CATALOG: RealPaint[] = [
+  { id: "p-dulux-01", brand: "Dulux", name: "Alabaster White", code: "#F2F1E9" },
+  { id: "p-sw-02", brand: "Sherwin-Williams", name: "Desert Sand", code: "#C4B199" },
+  { id: "p-bm-03", brand: "Benjamin Moore", name: "Soft Sage", code: "#9BA498" },
+  { id: "p-dulux-04", brand: "Dulux", name: "Slate Grey", code: "#5C6B73" },
+  { id: "p-sw-05", brand: "Sherwin-Williams", name: "Charcoal Black", code: "#37393D" }
+];
 
 interface SharedDataPayload {
   share_id: string;
   design_id?: string;
   design_name: string;
   room_data: Record<string, string>;
+  finish?: PaintFinishId;
   parent_template_name: string;
   painter_id: string;
   full_name: string;
@@ -34,6 +53,7 @@ interface SharedDataPayload {
   model_url?: string | null;
   master_design_id?: string;
   lighting_settings?: DBRawLight[];
+  custom_paint_deck?: RealPaint[]; // Dynamic payload tracking for painter collections
 }
 
 interface Painter3DConcept {
@@ -60,17 +80,30 @@ interface AuthUserPayload {
 }
 
 const ClientPaintPicker = PaintPicker as React.ComponentType<
-  React.ComponentProps<typeof PaintPicker> & { isReadOnly?: boolean }
+  React.ComponentProps<typeof PaintPicker> & {
+    isReadOnly?: boolean;
+    activeFinish?: PaintFinishId;
+    onFinishChange?: (finish: PaintFinishId) => void;
+  }
 >;
 
-// 📦 DYNAMIC CLIENT INTERACTIVE CANVAS ENGINE
+const WALL_MAPPING: Record<string, string> = {
+  left: 'wallLeft',
+  right: 'wallRight',
+  back: 'wallBack',
+  front: 'wallFront',
+  roof: 'ceiling'
+};
+
+// 📦 DYNAMIC CLIENT INTERACTIVE CANVAS ENGINE WITH SHEEN & MATERIAL FINISHES
 function ClientInteractiveCanvas({
   modelUrl,
   roomColors,
   onSurfaceSelect,
   bulbs,
   cameraConfig,
-  isNightMode
+  isNightMode,
+  activeFinish = "EMULSION",
 }: {
   modelUrl: string;
   roomColors: Record<string, string>;
@@ -78,9 +111,32 @@ function ClientInteractiveCanvas({
   bulbs: BulbState[];
   cameraConfig: DBCameraConfig;
   isNightMode: boolean;
+  activeFinish?: PaintFinishId;
 }) {
   const { scene } = useGLTF(modelUrl);
+  const clonedScene = React.useMemo(() => {
+    const clone = scene.clone();
+    const hasInnerWalls = !!clone.getObjectByName('wallLeft');
+    if (hasInnerWalls) {
+      console.log("🛠️ [View Canvas] Preparing scene: interior walls detected. Hiding structural exterior walls.");
+      clone.traverse((node) => {
+        if (node instanceof THREE.Mesh) {
+          if (WALL_MAPPING[node.name]) {
+            node.visible = false;
+            console.log(`🚫 [View Canvas] Hid duplicate exterior wall: ${node.name}`);
+          }
+        }
+      });
+    }
+    return clone;
+  }, [scene]);
   const controlsRef = useRef<OrbitControlsImpl>(null);
+
+  // Generate seamless wall stipple normal texture once
+  const wallNormalMap = React.useMemo(() => generateWallNormalMap(512, 512), []);
+
+  const finishPreset = PAINT_FINISH_PRESETS[activeFinish] || PAINT_FINISH_PRESETS.EMULSION;
+  const { roughness, metalness, clearcoat, clearcoatRoughness, bumpScale, envMapIntensity } = finishPreset.materialProps;
 
   useEffect(() => {
     if (controlsRef.current && cameraConfig) {
@@ -91,24 +147,83 @@ function ClientInteractiveCanvas({
   }, [cameraConfig]);
 
   useEffect(() => {
-    scene.traverse((node: THREE.Object3D) => {
-      if (node instanceof THREE.Mesh && node.material instanceof THREE.MeshStandardMaterial) {
-        node.castShadow = true;
+    if (!clonedScene) return;
+
+    clonedScene.traverse((node: THREE.Object3D) => {
+      if (node instanceof THREE.Mesh) {
+        const meshName = node.name;
+        if (!node.visible) return; // Skip hidden duplicate exterior walls
+
+        node.castShadow = false;
         node.receiveShadow = true;
-        if (roomColors[node.name]) {
-          node.material.color.set(roomColors[node.name]);
+
+        const targetKey = WALL_MAPPING[meshName] || meshName;
+        const isWallSurface = Boolean(roomColors[targetKey]);
+
+        if (isWallSurface) {
+          if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
+            const oldMat = node.material;
+            node.material = new THREE.MeshPhysicalMaterial({
+              color: oldMat.color,
+              map: oldMat.map || null,
+              side: THREE.DoubleSide,
+            });
+          }
+
+          const mat = node.material as THREE.MeshPhysicalMaterial;
+          mat.side = THREE.DoubleSide;
+
+          mat.roughness = roughness;
+          mat.metalness = metalness;
+          mat.clearcoat = clearcoat || 0;
+          mat.clearcoatRoughness = clearcoatRoughness || 0.1;
+          mat.envMapIntensity = envMapIntensity;
+
+          mat.bumpMap = wallNormalMap;
+          mat.bumpScale = bumpScale;
+
+          // Enable polygon offset to prevent overlapping mesh z-fighting
+          mat.polygonOffset = true;
+          mat.polygonOffsetFactor = -1;
+          mat.polygonOffsetUnits = -1;
+
+          mat.color.set(roomColors[targetKey]);
+          mat.needsUpdate = true;
+        } else if (node.material instanceof THREE.MeshStandardMaterial) {
+          node.material.needsUpdate = true;
         }
-        node.material.needsUpdate = true;
       }
     });
-  }, [scene, roomColors]);
+  }, [
+    clonedScene,
+    roomColors,
+    activeFinish,
+    roughness,
+    metalness,
+    clearcoat,
+    clearcoatRoughness,
+    bumpScale,
+    envMapIntensity,
+    wallNormalMap,
+  ]);
 
   return (
     <>
       <color attach="background" args={[isNightMode ? "#040406" : "#d1d5db"]} />
 
       <ambientLight intensity={isNightMode ? 0.02 : 0.4} color={isNightMode ? "#0a0f1d" : "#ffffff"} />
-      {!isNightMode && <directionalLight position={[4, 8, 4]} intensity={0.6} color="#ffffff" castShadow />}
+      {!isNightMode && (
+        <directionalLight
+          position={[4, 8, 4]}
+          intensity={0.7}
+          color="#ffffff"
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-bias={-0.0001}
+          shadow-normalBias={0.02}
+        />
+      )}
 
       {bulbs.map((bulb) => {
         const isLightOn = bulb.visible !== undefined ? bulb.visible : bulb.enabled;
@@ -128,11 +243,13 @@ function ClientInteractiveCanvas({
       })}
 
       <primitive
-        object={scene}
+        object={clonedScene}
         onClick={(e: ThreeEvent<MouseEvent>) => {
           e.stopPropagation();
           if (e.object instanceof THREE.Mesh) {
-            onSurfaceSelect(e.object.name || e.object.uuid);
+            const rawName = e.object.name || e.object.uuid;
+            const targetName = WALL_MAPPING[rawName] || rawName;
+            onSurfaceSelect(targetName);
           }
         }}
       />
@@ -158,14 +275,20 @@ export default function PublicProfileAndConceptPage() {
   const { accessToken, user } = useAuth();
   const { showToast } = useAlert();
 
+  // 🎨 Persistent custom color deck hook belonging universally to the target painter
+  const [painterGlobalDeck, setPainterGlobalDeck] = useState<RealPaint[]>([]);
+
   const targetId = (params?.sharedId || params?.id) as string;
 
   // View UI Panels Configurations
   const [activeTab, setActiveTab] = useState<"paint" | "lighting">("paint");
   const [activeSurface, setActiveSurface] = useState<string>("wallFront");
-  const [panelHeight, setPanelHeight] = useState<number>(280);
+  const [panelHeight, setPanelHeight] = useState<number>(320);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false);
   const isDragging = useRef<boolean>(false);
+
+  // Paint Material Finish State (EMULSION / SATIN / GLOSS)
+  const [activeFinish, setActiveFinish] = useState<PaintFinishId>("EMULSION");
 
   // Send Feedback Workflow Panel Matrix
   const [feedbackModalOpen, setFeedbackModalOpen] = useState<boolean>(false);
@@ -219,175 +342,16 @@ export default function PublicProfileAndConceptPage() {
     document.removeEventListener("touchend", stopDrag);
   };
 
-  // useEffect(() => {
-  //   if (!targetId) return;
-
-  //   const resolvePublicDataStream = async () => {
-  //     setIsLoading(true);
-  //     try {
-  //       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
-
-  //       // 🎯 STEP 1: Only check catalog if targetId is NOT a UUID (e.g. "tmpl_hostel_lux")
-  //       if (!isUuid) {
-  //         const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${targetId}`).catch(() => null);
-
-  //         if (catalogRes && catalogRes.ok) {
-  //           const templateData = await catalogRes.json();
-
-  //           setSharedConcept({
-  //             share_id: targetId,
-  //             shared_at: new Date().toISOString(),
-  //             design_name: templateData.title || "Master Architecture Concept",
-  //             room_data: templateData.default_room_data || {},
-  //             parent_template_name: templateData.title || "Master Architecture",
-  //             master_design_id: templateData.id,
-  //             painter_id: "system",
-  //             full_name: "PaintIt Catalog",
-  //             email: "studio@paintit.app",
-  //             bio: "Official PaintIt 3D Spatial Architecture Model.",
-  //             location: "Virtual Studio",
-  //             experience_years: 5,
-  //             skills: ["3D Visualization", "Spatial Design"],
-  //             avatar_url: "/logo.png",
-  //             phone_number: "",
-  //             model_url: templateData.model_url || "/models/selfcon.glb"
-  //           });
-
-  //           setRoomColors(templateData.default_room_data || {});
-
-  //           if (templateData.lighting_settings) {
-  //             setBulbs(
-  //               templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
-  //                 ...light,
-  //                 name: `Bulb #${index + 1}`,
-  //                 enabled: light.visible !== undefined ? light.visible : true,
-  //                 visible: light.visible !== undefined ? light.visible : true
-  //               }))
-  //             );
-  //           }
-
-  //           if (templateData.camera_settings) {
-  //             setCameraConfig(templateData.camera_settings);
-  //           }
-
-  //           setIs3DConceptShare(true);
-  //           setIsLoading(false);
-  //           return;
-  //         }
-  //       }
-
-  //       // 🎯 STEP 2: Attempt to resolve targetId as a public Share Link (UUID share_id)
-  //       const conceptRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`).catch(() => null);
-
-  //       if (conceptRes && conceptRes.ok) {
-  //         const conceptBody = await conceptRes.json();
-  //         const conceptData = conceptBody.data as SharedDataPayload;
-  //         setSharedConcept(conceptData);
-  //         setRoomColors(conceptData.room_data || {});
-  //         setIs3DConceptShare(true);
-
-  //         const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
-  //         const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
-
-  //         if (templateRes && templateRes.ok) {
-  //           const templateData = await templateRes.json();
-
-  //           if (templateData.lighting_settings) {
-  //             setBulbs(
-  //               templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
-  //                 ...light,
-  //                 name: `Bulb #${index + 1}`,
-  //                 enabled: light.visible !== undefined ? light.visible : true,
-  //                 visible: light.visible !== undefined ? light.visible : true
-  //               }))
-  //             );
-  //           }
-  //           if (templateData.camera_settings) {
-  //             setCameraConfig(templateData.camera_settings);
-  //           }
-  //         }
-  //         setIsLoading(false);
-  //         return;
-  //       }
-
-  //       // 🎯 STEP 3: Fallback - Treat targetId as a Painter User ID
-  //       const [profileRes, conceptsRes] = await Promise.all([
-  //         fetch(`${BACKEND_API_URL}/api/profile/${targetId}`).catch(() => null),
-  //         fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`).catch(() => null)
-  //       ]);
-
-  //       if (profileRes && profileRes.ok) {
-  //         const profileData = await profileRes.json();
-  //         setProfile(profileData.profile || null);
-  //       }
-  //       if (conceptsRes && conceptsRes.ok) {
-  //         const conceptsData = await conceptsRes.json();
-  //         setConcepts3D(conceptsData.visualizations || []);
-  //       }
-  //     } catch (err) {
-  //       console.error("Aggregation error on public stream:", err);
-  //     } finally {
-  //       setIsLoading(false);
-  //     }
-  //   };
-
-  //   resolvePublicDataStream();
-  // }, [targetId, BACKEND_API_URL]);
-
   useEffect(() => {
     if (!targetId) return;
-    const isSubscribed = true;
+    let isSubscribed = true;
 
     const resolvePublicDataStream = async () => {
       setIsLoading(true);
       try {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
 
-        // 🎯 STEP 1: If non-UUID string, check catalog templates (e.g., tmpl_hostel_lux)
-        // if (!isUuid) {
-        //   const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${targetId}`).catch(() => null);
-
-        //   if (catalogRes && catalogRes.ok) {
-        //     const templateData = await catalogRes.json();
-
-        //     setSharedConcept({
-        //       share_id: targetId,
-        //       shared_at: new Date().toISOString(),
-        //       design_name: templateData.title || "Master Architecture Concept",
-        //       room_data: templateData.default_room_data || {},
-        //       parent_template_name: templateData.title || "Master Architecture",
-        //       master_design_id: templateData.id,
-        //       painter_id: "system",
-        //       full_name: "PaintIt Catalog",
-        //       email: "studio@paintit.app",
-        //       bio: "Official PaintIt 3D Spatial Architecture Model.",
-        //       location: "Virtual Studio",
-        //       experience_years: 5,
-        //       skills: ["3D Visualization"],
-        //       avatar_url: "/logo.png",
-        //       phone_number: "",
-        //       model_url: templateData.model_url || "/models/selfcon.glb"
-        //     });
-
-        //     setRoomColors(templateData.default_room_data || {});
-        //     if (templateData.lighting_settings) {
-        //       setBulbs(
-        //         templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
-        //           ...light,
-        //           name: `Bulb #${index + 1}`,
-        //           enabled: light.visible !== undefined ? light.visible : true,
-        //           visible: light.visible !== undefined ? light.visible : true
-        //         }))
-        //       );
-        //     }
-        //     if (templateData.camera_settings) setCameraConfig(templateData.camera_settings);
-
-        //     setIs3DConceptShare(true);
-        //     setIsLoading(false);
-        //     return;
-        //   }
-        // }
-        // 🎯 3. Direct Client Hub Saved Remix Lookup (`visualizations` table)
+        // 🎯 1. Direct Client Hub Saved Remix Lookup (`visualizations` table)
         if (isUuid) {
           const directVisRes = await fetch(`${BACKEND_API_URL}/api/visualizations/public/${targetId}`).catch(() => null);
 
@@ -397,7 +361,6 @@ export default function PublicProfileAndConceptPage() {
 
             const vis = visBody.visualization;
 
-            // Safe parsing helper
             const safeParse = (data: unknown, fallback: unknown) => {
               if (!data) return fallback;
               if (typeof data === "string") {
@@ -409,12 +372,14 @@ export default function PublicProfileAndConceptPage() {
             const parsedRoomData = safeParse(vis.room_data, {});
             const parsedLightData = safeParse(vis.light_data, []);
             const parsedCameraData = safeParse(vis.camera_data, null);
+            const parsedFinish = (vis.finish as PaintFinishId) || "EMULSION";
 
             setSharedConcept({
               share_id: vis.id,
               shared_at: vis.created_at || new Date().toISOString(),
               design_name: vis.name || "Saved Remix Concept",
               room_data: parsedRoomData,
+              finish: parsedFinish,
               parent_template_name: vis.parent_template_name || "Custom Layout",
               master_design_id: vis.master_design_id || "tmpl_hostel_lux",
               painter_id: vis.user_id || "client",
@@ -430,8 +395,8 @@ export default function PublicProfileAndConceptPage() {
             });
 
             setRoomColors(parsedRoomData);
+            setActiveFinish(parsedFinish);
 
-            // 💡 Hydrate saved bulbs OR fetch template default lights
             const templateToFetch = vis.master_design_id || "tmpl_hostel_lux";
             const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
 
@@ -453,7 +418,6 @@ export default function PublicProfileAndConceptPage() {
               }
             }
 
-            // Prefer user's customized bulb settings if present, otherwise fall back to template default bulbs
             if (Array.isArray(parsedLightData) && parsedLightData.length > 0) {
               setBulbs(parsedLightData);
             } else if (templateBulbs.length > 0) {
@@ -470,7 +434,7 @@ export default function PublicProfileAndConceptPage() {
           }
         }
 
-        // 🎯 STEP 2: Check Share Links table (`shared_visualizations`)
+        // 🎯 2. Check Share Links table (`shared_visualizations`)
         const shareRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`).catch(() => null);
 
         if (shareRes && shareRes.ok) {
@@ -478,6 +442,16 @@ export default function PublicProfileAndConceptPage() {
           const conceptData = conceptBody.data as SharedDataPayload;
           setSharedConcept(conceptData);
           setRoomColors(conceptData.room_data || {});
+
+          if (conceptData.finish) {
+            setActiveFinish(conceptData.finish);
+          }
+
+          // Hydrate painter custom workspace decks from specific shared context if available
+          if (conceptData.custom_paint_deck) {
+            setPainterGlobalDeck(conceptData.custom_paint_deck);
+          }
+
           setIs3DConceptShare(true);
 
           const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
@@ -501,44 +475,7 @@ export default function PublicProfileAndConceptPage() {
           return;
         }
 
-        // 🎯 STEP 3: DIRECT CLIENT HUB LOOKUP (`visualizations` table by UUID)
-        const directVisRes = await fetch(`${BACKEND_API_URL}/api/visualizations/public/${targetId}`).catch(() => null);
-
-        if (directVisRes && directVisRes.ok) {
-          const visBody = await directVisRes.json();
-          const vis = visBody.visualization;
-
-          let parsedRoomData = vis.room_data || {};
-          if (typeof parsedRoomData === "string") {
-            try { parsedRoomData = JSON.parse(parsedRoomData); } catch { parsedRoomData = {}; }
-          }
-
-          setSharedConcept({
-            share_id: vis.id,
-            shared_at: vis.created_at || new Date().toISOString(),
-            design_name: vis.name || "Saved Remix Concept",
-            room_data: parsedRoomData,
-            parent_template_name: vis.parent_template_name || "Custom Layout",
-            master_design_id: vis.master_design_id || "tmpl_hostel_lux",
-            painter_id: vis.user_id || "client",
-            full_name: "Remixed Design Presentation",
-            email: "",
-            bio: null,
-            location: null,
-            experience_years: 0,
-            skills: [],
-            avatar_url: null,
-            phone_number: null,
-            model_url: "/models/selfcon.glb"
-          });
-
-          setRoomColors(parsedRoomData);
-          setIs3DConceptShare(true);
-          setIsLoading(false);
-          return;
-        }
-
-        // 🎯 STEP 4: Fallback - Painter Profile Lookup
+        // 🎯 3. Fallback - Painter Profile Lookup
         const [profileRes, conceptsRes] = await Promise.all([
           fetch(`${BACKEND_API_URL}/api/profile/${targetId}`).catch(() => null),
           fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`).catch(() => null)
@@ -547,6 +484,11 @@ export default function PublicProfileAndConceptPage() {
         if (profileRes && profileRes.ok) {
           const profileData = await profileRes.json();
           setProfile(profileData.profile || null);
+
+          // Seed universal paint deck from painter profiles to keep decks persistent across layouts
+          if (profileData.profile?.custom_paint_deck) {
+            setPainterGlobalDeck(profileData.profile.custom_paint_deck);
+          }
         }
         if (conceptsRes && conceptsRes.ok) {
           const conceptsData = await conceptsRes.json();
@@ -555,11 +497,15 @@ export default function PublicProfileAndConceptPage() {
       } catch (err) {
         console.error("Aggregation error on public stream:", err);
       } finally {
-        setIsLoading(false);
+        if (isSubscribed) setIsLoading(false);
       }
     };
 
     resolvePublicDataStream();
+
+    return () => {
+      isSubscribed = false;
+    };
   }, [targetId, BACKEND_API_URL]);
 
   useEffect(() => {
@@ -594,58 +540,7 @@ export default function PublicProfileAndConceptPage() {
     };
   }, []);
 
-  // const handleSaveToClientHub = async () => {
-  //   if (!accessToken || !user) {
-  //     showToast({ message: "Please create an account or log in to clone this design scheme.", severity: "error" });
-  //     router.push("/login");
-  //     return;
-  //   }
-
-  //   // 🎯 FIX: Case-insensitive check & fallback for default registered clients
-  //   const userRole = ((user as { role?: string })?.role || "client").toLowerCase();
-
-  //   if (userRole !== "client" && userRole !== "homeowner") {
-  //     showToast({ message: "Only client accounts can import designs into their Design Hub.", severity: "error" });
-  //     return;
-  //   }
-
-  //   if (!sharedConcept) return;
-
-  //   setImporting(true);
-  //   try {
-  //     const response = await fetch(`${BACKEND_API_URL}/api/visualizations`, {
-  //       method: "POST",
-  //       headers: {
-  //         "Authorization": `Bearer ${accessToken}`,
-  //         "Content-Type": "application/json"
-  //       },
-  //       body: JSON.stringify({
-  //         name: `${sharedConcept.design_name} (Remixed)`,
-  //         roomData: roomColors,
-  //         room_data: roomColors,
-  //         light_data: bulbs,
-  //         camera_data: cameraConfig,
-  //         masterDesignId: sharedConcept.master_design_id || "tmpl_living_lux"
-  //       })
-  //     });
-
-  //     if (response.ok) {
-  //       showToast({ message: "Design cloned perfectly! Redirecting to your Hub layout...", severity: "success" });
-  //       setTimeout(() => { router.push("/hub"); }, 1500);
-  //     } else {
-  //       const errorData = await response.json().catch(() => ({}));
-  //       showToast({ message: errorData.message || "Failed to clone design asset.", severity: "error" });
-  //     }
-  //   } catch (err) {
-  //     console.error(err);
-  //     showToast({ message: "Could not import design asset parameters.", severity: "error" });
-  //   } finally {
-  //     setImporting(false);
-  //   }
-  // };
-
   const handleSaveToClientHub = async () => {
-    // 1. READ TOKEN FROM ALL POSSIBLE LOCALSTORAGE KEYS
     const activeToken =
       accessToken ||
       (typeof window !== "undefined"
@@ -663,7 +558,6 @@ export default function PublicProfileAndConceptPage() {
       return;
     }
 
-    // 2. READ AND PARSE USER DATA DIRECTLY FROM LOCALSTORAGE IF CONTEXT IS EMPTY
     let currentUser = user as { role?: string } | null;
 
     if (!currentUser && typeof window !== "undefined") {
@@ -677,11 +571,9 @@ export default function PublicProfileAndConceptPage() {
       }
     }
 
-    // 3. FLEXIBLE ROLE VALIDATION (Case-insensitive & handles "client", "homeowner", etc.)
     const rawRole = currentUser?.role || "client";
     const normalizedRole = String(rawRole).toLowerCase().trim();
 
-    // Allow any non-painter account or client variant
     const isClientRole =
       normalizedRole.includes("client") ||
       normalizedRole.includes("homeowner") ||
@@ -707,9 +599,10 @@ export default function PublicProfileAndConceptPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: `${sharedConcept.design_name} (Remixed)`,
+          name: `${sharedConcept.design_name} (${activeFinish} Remix)`,
           roomData: roomColors,
           room_data: roomColors,
+          finish: activeFinish,
           light_data: bulbs,
           camera_data: cameraConfig,
           masterDesignId: sharedConcept.master_design_id || targetId || "tmpl_living_lux",
@@ -762,6 +655,7 @@ export default function PublicProfileAndConceptPage() {
             clientName: user ? (user as AuthUserPayload).full_name : "Anonymous Client",
             message: clientMessage.trim(),
             roomColors: roomColors,
+            finish: activeFinish,
             bulbs: bulbs
           }
         })
@@ -797,7 +691,7 @@ export default function PublicProfileAndConceptPage() {
     return (
       <div className="fixed inset-0 bg-neutral-950 flex flex-col overflow-hidden select-none z-40 text-white font-sans">
 
-        {/* Navigation HUD Header (Shifted down top-14 to clear app navbar) */}
+        {/* Navigation HUD Header */}
         <div className="fixed top-14 left-0 right-0 bg-neutral-950/90 border-b border-neutral-900 px-4 py-2.5 z-50 flex items-center justify-between backdrop-blur-md shadow-xl transition-all">
           <div>
             <h1 className="text-xs font-black uppercase tracking-wider text-neutral-100 truncate max-w-[180px] sm:max-w-xs">
@@ -826,7 +720,15 @@ export default function PublicProfileAndConceptPage() {
 
         {/* 3D Viewport View */}
         <div className="flex-1 w-full h-full relative z-10 pt-24">
-          <Canvas camera={{ position: cameraConfig.position || [-2.73, 3.28, -2.51], fov: 65 }}>
+          <Canvas
+            shadows
+            gl={{
+              antialias: true,
+              alpha: false,
+              logarithmicDepthBuffer: true,
+              powerPreference: "high-performance",
+            }}
+          >
             <Suspense fallback={null}>
               <ClientInteractiveCanvas
                 modelUrl={sharedConcept.model_url || "/models/selfcon.glb"}
@@ -835,6 +737,7 @@ export default function PublicProfileAndConceptPage() {
                 bulbs={bulbs}
                 cameraConfig={cameraConfig}
                 isNightMode={isNightMode}
+                activeFinish={activeFinish}
               />
             </Suspense>
           </Canvas>
@@ -845,8 +748,8 @@ export default function PublicProfileAndConceptPage() {
           <button
             onClick={() => { setActiveTab("paint"); setIsPanelCollapsed(false); }}
             className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "paint" && !isPanelCollapsed
-                ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-                : "bg-neutral-900/90 border-neutral-800 text-white"
+              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+              : "bg-neutral-900/90 border-neutral-800 text-white"
               }`}
           >
             🎨
@@ -854,8 +757,8 @@ export default function PublicProfileAndConceptPage() {
           <button
             onClick={() => { setActiveTab("lighting"); setIsPanelCollapsed(false); }}
             className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "lighting" && !isPanelCollapsed
-                ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-                : "bg-neutral-900/90 border-neutral-800 text-white"
+              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+              : "bg-neutral-900/90 border-neutral-800 text-white"
               }`}
           >
             💡
@@ -883,14 +786,50 @@ export default function PublicProfileAndConceptPage() {
 
           <div className="flex-1 overflow-y-auto px-4 pb-6">
             {activeTab === "paint" && (
-              <ClientPaintPicker
-                activeSurface={activeSurface}
-                roomColors={roomColors}
-                setRoomColors={setRoomColors}
-                customColors={customColors}
-                setCustomColors={setCustomColors}
-                isReadOnly={true}
-              />
+              <>
+                {/* 🎯 CONTEXTUAL BRAND & PAINT SPECIFICATION PANEL */}
+                <div className="flex flex-col gap-1 p-4 bg-neutral-900/60 rounded-2xl border border-neutral-850 mb-4 shadow-inner">
+                  <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest font-mono">
+                    Surface Node Matrix: <span className="text-emerald-400">{activeSurface.toUpperCase()}</span>
+                  </span>
+                  <div className="flex items-center justify-between mt-1">
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-neutral-200 tracking-wide">
+                        {(() => {
+                          const currentHex = roomColors[WALL_MAPPING[activeSurface] || activeSurface] || "#ffffff";
+                          const match = REAL_PAINTS_CATALOG.find(p => p.code.toUpperCase() === currentHex.toUpperCase()) ||
+                            painterGlobalDeck.find(p => p.code.toUpperCase() === currentHex.toUpperCase());
+                          return match ? match.name : "Custom Color Mix";
+                        })()}
+                      </h4>
+                      <p className="text-[10px] text-neutral-500 mt-0.5 font-medium">
+                        {(() => {
+                          const currentHex = roomColors[WALL_MAPPING[activeSurface] || activeSurface] || "#ffffff";
+                          const match = REAL_PAINTS_CATALOG.find(p => p.code.toUpperCase() === currentHex.toUpperCase()) ||
+                            painterGlobalDeck.find(p => p.code.toUpperCase() === currentHex.toUpperCase());
+                          return match ? `${match.brand} • ` : "Workspace Formula • ";
+                        })()}
+                        <span className="text-emerald-400 font-bold text-[9px] font-mono">{activeFinish}</span>
+                      </p>
+                    </div>
+                    <div
+                      className="w-7 h-7 rounded-xl border border-neutral-800/80 shadow-2xl shrink-0 transition-all duration-300"
+                      style={{ backgroundColor: roomColors[WALL_MAPPING[activeSurface] || activeSurface] || '#ffffff' }}
+                    />
+                  </div>
+                </div>
+
+                <ClientPaintPicker
+                  activeSurface={activeSurface}
+                  roomColors={roomColors}
+                  setRoomColors={setRoomColors}
+                  customColors={customColors}
+                  setCustomColors={setCustomColors}
+                  isReadOnly={true}
+                  activeFinish={activeFinish}
+                  onFinishChange={setActiveFinish}
+                />
+              </>
             )}
             {activeTab === "lighting" && (
               <LightControls
@@ -910,7 +849,7 @@ export default function PublicProfileAndConceptPage() {
               <div className="space-y-1">
                 <h3 className="text-sm font-black uppercase tracking-wider text-neutral-100">Submit Adjustments to Painter</h3>
                 <p className="text-[11px] text-neutral-400">
-                  Your currently selected room configuration preset colors and bulb settings will be attached safely to this message log stream.
+                  Your currently selected room configuration preset colors, sheen finish, and bulb settings will be attached safely to this message log stream.
                 </p>
               </div>
 
@@ -918,7 +857,7 @@ export default function PublicProfileAndConceptPage() {
                 <textarea
                   required
                   rows={4}
-                  placeholder="e.g. I swapped the front wall to Desert Sand and loved how it pops under day mode. Let's proceed with these changes!"
+                  placeholder="e.g. I swapped the front wall to Desert Sand in Satin finish and loved how it pops under day mode. Let's proceed with these changes!"
                   value={clientMessage}
                   onChange={(e) => setClientMessage(e.target.value)}
                   className="w-full bg-neutral-950 border border-neutral-800 focus:border-cyan-500 rounded-xl p-3 text-xs text-white placeholder-neutral-600 focus:outline-none transition-all resize-none"

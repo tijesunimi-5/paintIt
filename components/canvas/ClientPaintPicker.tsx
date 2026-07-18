@@ -1,10 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
+import { PaintFinishSelector } from "@/components/ui/PaintFinishSelector";
+import { PaintFinishId } from "@/config/paintFinishes";
+import { REAL_PAINTS_CATALOG } from '@/config/paints';
 
 export interface CustomColor {
   name: string;
   hex: string;
+  brand?: string;
+  id?: string;
 }
 
 interface PaintPickerProps {
@@ -13,7 +18,9 @@ interface PaintPickerProps {
   setRoomColors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   customColors: CustomColor[];
   setCustomColors: React.Dispatch<React.SetStateAction<CustomColor[]>>;
-  isReadOnly?: boolean; // 🎯 Real interface addition
+  isReadOnly?: boolean;
+  activeFinish?: PaintFinishId;
+  onFinishChange?: (finish: PaintFinishId) => void;
 }
 
 export default function PaintPicker({
@@ -22,20 +29,23 @@ export default function PaintPicker({
   setRoomColors,
   customColors,
   setCustomColors,
-  isReadOnly = false // Default to false for the painter workspace
+  isReadOnly = false,
+  activeFinish = "EMULSION",
+  onFinishChange
 }: PaintPickerProps) {
   const [newColorName, setNewColorName] = useState("");
   const [newColorHex, setNewColorHex] = useState("#10B981");
+  const [syncingState, setSyncingState] = useState(false);
 
-  const presets = [
-    { name: "Alabaster White", hex: "#F2EFE9" },
-    { name: "Desert Sand", hex: "#C4B199" },
-    { name: "Soft Sage", hex: "#9BA498" },
-    { name: "Slate Grey", hex: "#5C6B73" },
-    { name: "Charcoal Black", hex: "#37393D" }
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+  // Build the master structural color deck by mapping commercial presets with saved custom swatches
+  const combinedPaintDeck = [
+    ...REAL_PAINTS_CATALOG.map(p => ({ name: p.name, hex: p.code, brand: p.brand })),
+    ...customColors.map(c => ({ name: c.name, hex: c.hex, brand: c.brand || "Custom Mix" }))
   ];
 
-  const handleAddCustomColor = (e: React.FormEvent) => {
+  const handleAddCustomColor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isReadOnly || !newColorName.trim() || !newColorHex.trim()) return;
 
@@ -52,14 +62,44 @@ export default function PaintPicker({
 
     const newColor: CustomColor = {
       name: newColorName.trim(),
-      hex: formattedHex
+      hex: formattedHex,
+      brand: "Custom Mix"
     };
 
+    // 1. Optimistic UI updates
     setCustomColors((prev) => [...prev, newColor]);
     setRoomColors((prev) => ({ ...prev, [activeSurface]: formattedHex }));
-
     setNewColorName("");
     setNewColorHex("#10B981");
+
+    // 2. Global Profile Sync Hook Trigger (Fires silently if token is active)
+    if (typeof window !== "undefined") {
+      const activeToken = localStorage.getItem("paintit_access_token") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("accessToken");
+
+      if (activeToken) {
+        setSyncingState(true);
+        try {
+          await fetch(`${BACKEND_API_URL}/api/profile/custom-paints`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${activeToken}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              name: newColor.name,
+              code: newColor.hex,
+              brand: newColor.brand
+            })
+          });
+        } catch (err) {
+          console.error("Failed to sync custom color to universal database profile:", err);
+        } finally {
+          setSyncingState(false);
+        }
+      }
+    }
   };
 
   const formatSurfaceName = (name: string) => {
@@ -68,6 +108,7 @@ export default function PaintPicker({
 
   return (
     <div className="space-y-4">
+
       {/* ACTIVE SURFACE TARGET HUD */}
       <div className="bg-neutral-900 border border-neutral-800/80 rounded-xl p-3 flex items-center justify-between">
         <div>
@@ -87,40 +128,50 @@ export default function PaintPicker({
         </div>
       </div>
 
-      {/* Preset Decks */}
+      {/* 🚀 COMBINED MAIN PAINTS & CUSTOM SWATCHES SLIDER */}
       <div className="space-y-2">
-        <span className="text-[9px] uppercase font-black tracking-widest text-neutral-500">Preset Decks</span>
+        <span className="text-[9px] uppercase font-black tracking-widest text-neutral-500">Available Paint Catalog Decks</span>
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none snap-x">
-          {presets.map((preset) => {
-            const isSelected = roomColors[activeSurface] === preset.hex;
+          {combinedPaintDeck.map((paint, index) => {
+            const isSelected = (roomColors[activeSurface] || '#ffffff').toUpperCase() === paint.hex.toUpperCase();
             return (
               <button
-                key={preset.hex}
+                key={`${paint.hex}-${index}`}
                 type="button"
-                onClick={() => setRoomColors((prev) => ({ ...prev, [activeSurface]: preset.hex }))}
+                onClick={() => setRoomColors((prev) => ({ ...prev, [activeSurface]: paint.hex }))}
                 className={`snap-center shrink-0 w-28 p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${isSelected ? "bg-white border-white text-neutral-950" : "bg-neutral-900 border-neutral-850 text-white"
                   }`}
               >
-                <div className="w-5 h-5 rounded-full border border-neutral-800" style={{ backgroundColor: preset.hex }} />
-                <span className="text-[9px] font-black truncate mt-2">{preset.name}</span>
-                <span className="text-[8px] font-mono mt-0.5 opacity-60">{preset.hex}</span>
+                <div className="w-5 h-5 rounded-full border border-neutral-800/20" style={{ backgroundColor: paint.hex }} />
+                <div className="mt-2">
+                  <span className="text-[8px] uppercase font-bold text-emerald-500 block truncate leading-none mb-0.5">{paint.brand}</span>
+                  <span className="text-[9px] font-black truncate block leading-tight">{paint.name}</span>
+                </div>
+                <span className="text-[8px] font-mono mt-1 opacity-60">{paint.hex.toUpperCase()}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* 🚀 CONDITIONAL RENDER: Only show color input mixture fields if NOT read-only */}
+      {/* MIX CUSTOM FORMULA SECTION */}
       {!isReadOnly && (
         <div className="border-t border-neutral-900 pt-3">
           <form onSubmit={handleAddCustomColor} className="space-y-3">
-            <span className="text-[9px] uppercase font-black tracking-widest text-neutral-500 block">Mix Custom Color</span>
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] uppercase font-black tracking-widest text-neutral-500 block">Mix Custom Color</span>
+              {syncingState && (
+                <span className="text-[8px] uppercase tracking-widest font-mono text-cyan-400 font-bold animate-pulse">
+                  Syncing to profile...
+                </span>
+              )}
+            </div>
 
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Color Name (e.g. Dulux Amber Glow)"
+                  placeholder="Color Name (e.g. Custom Amber Glow)"
                   value={newColorName}
                   onChange={(e) => setNewColorName(e.target.value)}
                   className="flex-1 bg-neutral-900 border border-neutral-850 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 text-white"
@@ -149,35 +200,21 @@ export default function PaintPicker({
                   type="submit"
                   className="px-5 bg-emerald-500 text-neutral-950 font-black rounded-xl text-[10px] uppercase tracking-wider"
                 >
-                  Add Color
+                  Add & Save
                 </button>
               </div>
             </div>
           </form>
+        </div>
+      )}
 
-          {customColors.length > 0 && (
-            <div className="space-y-2 mt-4">
-              <span className="text-[9px] uppercase font-black tracking-widest text-neutral-500 block">My Custom Swatches</span>
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                {customColors.map((color, index) => {
-                  const isSelected = roomColors[activeSurface] === color.hex;
-                  return (
-                    <button
-                      key={`${color.hex}-${index}`}
-                      type="button"
-                      onClick={() => setRoomColors((prev) => ({ ...prev, [activeSurface]: color.hex }))}
-                      className={`shrink-0 flex items-center gap-2 border p-2 rounded-xl text-[10px] transition-all ${isSelected ? "bg-white border-white text-neutral-950" : "bg-neutral-900 border-neutral-850 text-white"
-                        }`}
-                    >
-                      <div className="w-3.5 h-3.5 rounded-full border border-neutral-800" style={{ backgroundColor: color.hex }} />
-                      <span className="font-bold">{color.name}</span>
-                      <span className="font-mono opacity-60 text-[8px]">{color.hex}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+      {/* 🎯 WALL PAINT FINISH & SHEEN SELECTOR */}
+      {onFinishChange && (
+        <div className="pt-2">
+          <PaintFinishSelector
+            currentFinish={activeFinish}
+            onChangeFinish={onFinishChange}
+          />
         </div>
       )}
     </div>

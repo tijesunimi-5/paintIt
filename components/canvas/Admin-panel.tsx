@@ -2,6 +2,8 @@
 
 import React, { useState, useRef } from 'react';
 import { DynamicLightInstance } from '@/types/index';
+import { PaintFinishSelector } from '@/components/ui/PaintFinishSelector';
+import { PaintFinishId } from '@/config/paintFinishes';
 
 const MAX_CEILING_HEIGHT = 15.0;
 
@@ -18,6 +20,8 @@ interface AdminPanelProps {
   onVectorUpdate: (property: 'position' | 'rotation' | 'scale', axisIndex: number, value: number) => void;
   currentColor: string;
   onColorChange: (color: string) => void;
+  currentFinish?: PaintFinishId;
+  onFinishChange?: (finish: PaintFinishId) => void;
   onCameraPan: (direction: 'up' | 'down' | 'left' | 'right', step?: number) => void;
   onCameraZoomChange: (zoomValue: number) => void;
   currentZoomValue: number;
@@ -32,7 +36,7 @@ interface AdminPanelProps {
 export function FloatingAdminPanel({
   activeSurface, sceneLights, selectedLightId, gizmoMode, onGizmoModeChange,
   onAddLight, onSelectLight, onDeleteLight, onScalarUpdate, onVectorUpdate,
-  currentColor, onColorChange, onCameraPan, onCameraZoomChange, currentZoomValue,
+  currentColor, onColorChange, currentFinish, onFinishChange, onCameraPan, onCameraZoomChange, currentZoomValue,
   isLocked, onToggleLock, onSaveToDatabase, cleanViewActive, onToggleCleanView,
   isLandscapeLayout
 }: AdminPanelProps) {
@@ -174,6 +178,15 @@ export function FloatingAdminPanel({
                       ))}
                     </div>
                   </div>
+
+                  {currentFinish && onFinishChange && (
+                    <div className="pt-2 border-t border-neutral-900/40 w-full">
+                      <PaintFinishSelector
+                        currentFinish={currentFinish}
+                        onChangeFinish={onFinishChange}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>

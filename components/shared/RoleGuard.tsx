@@ -17,8 +17,6 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ children, allowedRole }) =
   const pathname = usePathname();
   const [serverVerifying, setServerVerifying] = useState<boolean>(true);
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
   useEffect(() => {
     const runGlobalSecurityIntercept = async () => {
       // 🗺️ 1. Omit Public Routes (Bypass checks instantly)
@@ -37,43 +35,19 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ children, allowedRole }) =
         return;
       }
 
-      try {
-        // 📡 3. Server Status Check (Lightweight endpoint to bypass analytics rate-limiting locks)
-        const response = await fetch(`${BACKEND_API_URL}/api/auth/refresh`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            refreshToken: localStorage.getItem('paintit_refresh_token')
-          })
-        });
-
-        // 🚨 Kick user out instantly if session is revoked or dead on backend!
-        if (response.status === 401 || response.status === 403) {
-          console.warn("🔒 Stale session token detected. Enforcing system ejection...");
-          await logout();
-          return;
-        }
-
-        // 🛡️ 4. Role Isolation Gatehouse
-        if (user?.role !== allowedRole) {
-          if (user?.role === 'PAINTER') router.replace('/dashboard');
-          else if (user?.role === 'CONSUMER') router.replace('/hub');
-          else router.replace('/');
-          return;
-        }
-
-        setServerVerifying(false);
-      } catch (err) {
-        console.error("Global guard security handshake failed o:", err);
-        // Fallback flag allows rendering during complete network timeouts so app doesn't freeze
-        setServerVerifying(false);
+      // 🛡️ 3. Role Isolation Gatehouse
+      if (user?.role !== allowedRole) {
+        if (user?.role === 'PAINTER') router.replace('/dashboard');
+        else if (user?.role === 'CONSUMER') router.replace('/hub');
+        else router.replace('/');
+        return;
       }
+
+      setServerVerifying(false);
     };
 
     runGlobalSecurityIntercept();
-  }, [authLoading, accessToken, user, allowedRole, router, pathname, BACKEND_API_URL, logout]);
+  }, [authLoading, accessToken, user, allowedRole, router, pathname, logout]);
 
   // Combined UX Loading Layout
   if (authLoading || serverVerifying) {

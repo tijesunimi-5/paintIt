@@ -84,7 +84,7 @@ function WorkspaceContent() {
 
   const [customColors, setCustomColors] = useState<CustomColor[]>([]);
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
   const initialRoomColorsRef = useRef(roomColors);
   const initialCameraConfigRef = useRef(cameraConfig);
 
