@@ -230,11 +230,11 @@ function ClientInteractiveCanvas({
     <>
       <color attach="background" args={[isNightMode ? "#040406" : "#d1d5db"]} />
 
-      <ambientLight intensity={isNightMode ? 0.02 : 0.35} color={isNightMode ? "#0a0f1d" : "#ffffff"} />
+      <ambientLight intensity={isNightMode ? 0.02 : 0.55} color={isNightMode ? "#0a0f1d" : "#ffffff"} />
       {!isNightMode && (
         <directionalLight
           position={[4, 8, 4]}
-          intensity={0.5}
+          intensity={0.85}
           color="#ffffff"
           castShadow
           shadow-mapSize-width={2048}

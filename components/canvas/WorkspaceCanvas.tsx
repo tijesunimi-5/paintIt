@@ -156,7 +156,7 @@ export default function WorkspaceCanvas({
 
       {/* Optimized Ambient Environment */}
       <ambientLight
-        intensity={isNightMode ? 0.05 : 0.45}
+        intensity={isNightMode ? 0.05 : 0.55}
         color={isNightMode ? "#0c1220" : "#ffffff"}
       />
 
@@ -164,7 +164,7 @@ export default function WorkspaceCanvas({
       {!isNightMode && (
         <directionalLight
           position={[4, 8, 4]}
-          intensity={0.5}
+          intensity={0.85}
           color="#ffffff"
           castShadow
           shadow-mapSize-width={512}

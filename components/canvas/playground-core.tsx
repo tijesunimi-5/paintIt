@@ -78,8 +78,8 @@ export function PlaygroundLighting({ isNight, showHelpers }: BaseLightingProps) 
         </>
       ) : (
         <>
-          <ambientLight intensity={0.35} color="#ffffff" />
-          <hemisphereLight args={['#ffffff', '#444444', 0.25]} />
+          <ambientLight intensity={0.55} color="#ffffff" />
+          <hemisphereLight args={['#ffffff', '#444444', 0.35]} />
         </>
       )}
     </>
