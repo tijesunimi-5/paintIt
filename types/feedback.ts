@@ -49,4 +49,5 @@ export interface InboundLead {
   created_at: string;
   isLocked?: boolean;
   roomColors?: Record<string, string> | null;
+  finish?: string | null;
 }

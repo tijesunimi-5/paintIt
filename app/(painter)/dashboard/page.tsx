@@ -145,23 +145,30 @@ export default function PainterDashboardPage() {
               meta = item.meta_tracking_data as Record<string, unknown>;
             }
 
-            // Fallback: Check metadata if item.email is empty or general fallback
-            const resolvedEmail = item.email || (meta.email as string) || (meta.clientEmail as string) || "client@paintit.app";
+            // Real email extraction: check item.client_email, item.email, and meta keys
+            const rawEmail = (item as unknown as { client_email?: string }).client_email || item.email || (meta.email as string) || (meta.clientEmail as string) || (meta.client_email as string);
+            const resolvedEmail = rawEmail && rawEmail.trim() ? rawEmail.trim() : "client@paintit.app";
+
+            const rawName = (item as unknown as { client_name?: string }).client_name || (meta.clientName as string) || (meta.client_name as string);
+            const resolvedName = rawName && rawName.trim() ? rawName.trim() : (resolvedEmail.includes("@") ? resolvedEmail.split("@")[0] : "Interested Client");
+
+            const rawPhone = (item as unknown as { client_phone?: string }).client_phone || (meta.phone as string) || (meta.clientPhone as string) || null;
 
             return {
               id: item.id,
-              client_name: (meta.clientName as string) || item.email?.split("@")[0] || "Interested Client",
+              client_name: resolvedName,
               client_email: resolvedEmail,
-              client_phone: (meta.phone as string) || null,
+              client_phone: rawPhone,
               project_description:
-                (meta.message as string) ||
                 item.project_description ||
+                (meta.message as string) ||
                 "Interested in custom painting services.",
               conversion_source: item.conversion_source,
               created_at: item.created_at,
-              isLocked: item.isLocked,
-              roomColors: (meta.roomColors as Record<string, string>) || null
-            };
+              isLocked: false, // Always unlock real client contact details for painter
+              roomColors: (meta.roomColors as Record<string, string>) || null,
+              finish: (meta.finish as string) || null
+            } as InboundLead;
           });
 
           setLeads(formattedLeads);

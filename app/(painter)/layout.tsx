@@ -4,7 +4,6 @@
 import React from "react";
 import { RoleGuard } from "@/components/shared/RoleGuard";
 import { BottomNav, NavItem } from "@/components/ui/BottomNav";
-
 export default function PainterDashboardLayoutShell({
   children,
 }: {

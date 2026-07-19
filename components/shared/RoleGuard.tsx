@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { UserRole } from '@/types';
+import WorkspaceSkeletonLoader from '@/components/ui/WorkspaceSkeletonLoader';
 
 interface RoleGuardProps {
   children: React.ReactNode;
@@ -51,14 +52,7 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ children, allowedRole }) =
 
   // Combined UX Loading Layout
   if (authLoading || serverVerifying) {
-    return (
-      <div className="min-h-screen w-full bg-black flex flex-col items-center justify-center gap-4">
-        <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-[10px] text-neutral-500 font-bold tracking-widest uppercase">
-          Verifying secure framework layout access vectors...
-        </span>
-      </div>
-    );
+    return <WorkspaceSkeletonLoader message="Verifying Secure Session Registry..." />;
   }
 
   // Double check fallback properties prior to commit injection
