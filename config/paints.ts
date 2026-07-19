@@ -105,6 +105,18 @@ export const REAL_PAINTS_CATALOG: RealPaint[] = [
     name: "Espresso Brown",
     code: "#4A3028",
   },
+  {
+    id: "p-sw-18",
+    brand: "Benjamin Moore",
+    name: "Warm Ivory",
+    code: "#F5F0E8",
+  },
+  {
+    id: "p-sw-06",
+    brand: "Benjamin Moore",
+    name: "Deep Charcoal Grey",
+    code: "#3483C",
+  },
 ];
 
 // // Helper helper function to find metadata by hex color code

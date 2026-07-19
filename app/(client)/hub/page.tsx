@@ -197,45 +197,86 @@ export default function HomeownerClientHubDashboard() {
                 parsedColors = design.room_data;
               }
 
+              // Extract key surfaces for the 3D abstract geometric room mockup preview
+              const fallbackWall = parsedColors["wallBack"] || parsedColors["wallLeft"] || parsedColors["wallRight"] || "#5C6B73";
+              const fallbackFloor = parsedColors["floor"] || "#C4B199";
+              const fallbackCeiling = parsedColors["ceiling"] || "#F2EFE9";
+
               return (
                 <div
                   key={design.id}
                   onClick={() => router.push(`/view/${design.id}`)}
-                  className="group bg-neutral-950 border border-neutral-900 hover:border-emerald-500/40 p-5 rounded-2xl flex flex-col justify-between cursor-pointer shadow-xl transition-all duration-200 space-y-4"
+                  className="group bg-neutral-950 border border-neutral-900 hover:border-emerald-500/40 p-4 rounded-2xl flex flex-col justify-between cursor-pointer shadow-xl transition-all duration-200 space-y-4"
                 >
                   <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="text-xs font-black uppercase tracking-wide text-neutral-100 group-hover:text-emerald-400 transition-colors truncate max-w-[180px]">
-                          {design.name}
-                        </h4>
-                        <span className="text-[9px] text-neutral-500 font-mono uppercase block mt-0.5">
-                          Base: {design.parent_template_name || "Custom Architecture"}
+
+                    {/* 🖼️ ISOMETRIC ABSTRACT IMAGE COMPONENT PREVIEW */}
+                    <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-neutral-900 border border-neutral-850 flex items-center justify-center shadow-inner group-hover:border-neutral-800 transition-colors">
+                      <div className="absolute inset-0 flex flex-col">
+                        {/* Ceiling Component Mapping */}
+                        <div
+                          className="h-1/4 w-full border-b border-black/10 transition-colors duration-300 shadow-sm"
+                          style={{ backgroundColor: fallbackCeiling }}
+                        />
+                        {/* Interactive Wall Layout Perspective Partition */}
+                        <div className="flex-1 flex">
+                          <div
+                            className="w-1/2 h-full border-r border-black/10 transition-colors duration-300"
+                            style={{ backgroundColor: parsedColors["wallLeft"] || fallbackWall }}
+                          />
+                          <div className="w-1/2 h-full flex flex-col">
+                            <div
+                              className="h-1/2 w-full transition-colors duration-300"
+                              style={{ backgroundColor: parsedColors["wallBack"] || fallbackWall }}
+                            />
+                            <div
+                              className="h-1/2 w-full transition-colors duration-300 border-t border-black/5"
+                              style={{ backgroundColor: fallbackFloor }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* HUD Swatch Badge Overlays inside the Preview Frame */}
+                      <div className="absolute bottom-2 left-2 right-2 flex gap-1 overflow-hidden pointer-events-none drop-shadow-md">
+                        {Object.entries(parsedColors).slice(0, 4).map(([surface, hex]) => (
+                          <div
+                            key={surface}
+                            className="w-2.5 h-2.5 rounded-full border border-black/40 shadow-sm shrink-0"
+                            style={{ backgroundColor: hex }}
+                            title={`${surface}: ${hex}`}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Launch Hover Action Overlay */}
+                      <div className="absolute inset-0 bg-neutral-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                        <span className="text-[9px] uppercase font-black tracking-widest bg-emerald-500 text-neutral-950 px-2.5 py-1.5 rounded-lg shadow-lg">
+                          Launch Canvas
                         </span>
+                      </div>
+                    </div>
+
+                    {/* 📝 METADATA DETAILS & TITLE INVENTORY */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[8px] uppercase tracking-widest font-black text-emerald-400 block mb-0.5">
+                          {design.parent_template_name || "Custom Architecture Preset"}
+                        </span>
+                        <h4 className="text-xs font-black uppercase tracking-wide text-neutral-100 group-hover:text-emerald-400 transition-colors truncate">
+                          {design.name || "Untitled Spatial View Configuration"}
+                        </h4>
                       </div>
                       <button
                         onClick={(e) => handleDeleteDesign(e, design.id)}
                         disabled={deletingId === design.id}
-                        className="text-neutral-600 hover:text-red-400 text-xs p-1 rounded transition-colors"
+                        className="text-neutral-600 hover:text-red-400 text-xs p-1 rounded transition-colors shrink-0"
                         title="Delete Design"
                       >
                         {deletingId === design.id ? "⌛" : "🗑️"}
                       </button>
                     </div>
 
-                    {/* Color Swatch Preview Strip */}
-                    {Object.keys(parsedColors).length > 0 && (
-                      <div className="flex items-center gap-1.5 p-2 bg-neutral-900/50 border border-neutral-850 rounded-xl overflow-x-auto">
-                        {Object.entries(parsedColors).slice(0, 5).map(([surface, hex]) => (
-                          <div
-                            key={surface}
-                            className="w-4 h-4 rounded-full border border-white/20 shrink-0 shadow-inner"
-                            style={{ backgroundColor: hex }}
-                            title={`${surface}: ${hex}`}
-                          />
-                        ))}
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-neutral-900/60 text-[9px] font-bold text-neutral-500">
@@ -243,7 +284,7 @@ export default function HomeownerClientHubDashboard() {
                       {new Date(design.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                     </span>
                     <span className="text-emerald-400 uppercase tracking-wider group-hover:underline flex items-center gap-0.5">
-                      Launch 3D Canvas ➔
+                      Open Design &rarr;
                     </span>
                   </div>
                 </div>
