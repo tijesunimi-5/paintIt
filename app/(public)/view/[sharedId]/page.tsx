@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Canvas, ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Environment } from "@react-three/drei";
+import { OrbitControls, useGLTF, Environment, Sky } from "@react-three/drei";
 import * as THREE from "three";
 import Image from "next/image";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
@@ -97,7 +97,6 @@ function ClientInteractiveCanvas({
 }) {
   const { scene } = useGLTF(modelUrl);
   const clonedScene = React.useMemo(() => {
-    if (!scene) return null;
     const clone = scene.clone();
     const hasInnerWalls = !!clone.getObjectByName('wallLeft');
     if (hasInnerWalls) {
@@ -129,6 +128,42 @@ function ClientInteractiveCanvas({
     }
   }, [cameraConfig]);
 
+  // useEffect(() => {
+  //   scene.traverse((node: THREE.Object3D) => {
+  //     if (node instanceof THREE.Mesh) {
+  //       node.castShadow = true;
+  //       node.receiveShadow = true;
+
+  //       // Upgrade material to MeshPhysicalMaterial for clearcoat & sheen rendering
+  //       if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
+  //         const oldMat = node.material;
+  //         node.material = new THREE.MeshPhysicalMaterial({
+  //           color: oldMat.color,
+  //           map: oldMat.map || null,
+  //         });
+  //       }
+
+  //       const mat = node.material as THREE.MeshPhysicalMaterial;
+
+  //       // Apply finish sheen properties
+  //       mat.roughness = roughness;
+  //       mat.metalness = metalness;
+  //       mat.clearcoat = clearcoat || 0;
+  //       mat.clearcoatRoughness = clearcoatRoughness || 0.1;
+  //       mat.envMapIntensity = envMapIntensity;
+
+  //       // Apply roller bump texture to wall surfaces
+  //       mat.bumpMap = wallNormalMap;
+  //       mat.bumpScale = bumpScale;
+
+  //       if (roomColors[node.name]) {
+  //         mat.color.set(roomColors[node.name]);
+  //       }
+  //       mat.needsUpdate = true;
+  //     }
+  //   });
+  // }, [scene, roomColors, activeFinish, roughness, metalness, clearcoat, clearcoatRoughness, bumpScale, envMapIntensity, wallNormalMap]);
+
   useEffect(() => {
     if (!clonedScene) return;
 
@@ -144,16 +179,13 @@ function ClientInteractiveCanvas({
         const isWallSurface = Boolean(roomColors[targetKey]);
 
         if (isWallSurface) {
-          const singleMat = Array.isArray(node.material) ? node.material[0] : node.material;
-
-          if (!(singleMat instanceof THREE.MeshPhysicalMaterial)) {
+          if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
+            const oldMat = node.material;
             node.material = new THREE.MeshPhysicalMaterial({
-              color: singleMat?.color ? singleMat.color.clone() : new THREE.Color("#ffffff"),
-              map: singleMat?.map || null,
+              color: oldMat.color,
+              map: oldMat.map || null,
               side: THREE.DoubleSide,
             });
-          } else {
-            node.material = singleMat;
           }
 
           const mat = node.material as THREE.MeshPhysicalMaterial;
@@ -173,15 +205,10 @@ function ClientInteractiveCanvas({
           mat.polygonOffsetFactor = -1;
           mat.polygonOffsetUnits = -1;
 
-          if (roomColors[targetKey]) {
-            mat.color.set(roomColors[targetKey]);
-          }
+          mat.color.set(roomColors[targetKey]);
           mat.needsUpdate = true;
-        } else if (node.material) {
-          const singleMat = Array.isArray(node.material) ? node.material[0] : node.material;
-          if (singleMat instanceof THREE.MeshStandardMaterial) {
-            singleMat.needsUpdate = true;
-          }
+        } else if (node.material instanceof THREE.MeshStandardMaterial) {
+          node.material.needsUpdate = true;
         }
       }
     });
@@ -197,28 +224,22 @@ function ClientInteractiveCanvas({
     envMapIntensity,
     wallNormalMap,
   ]);
+  
 
   return (
     <>
       <color attach="background" args={[isNightMode ? "#040406" : "#d1d5db"]} />
 
-      {/* 🏙️ ENVIRONMENT MAP REFLECTION PROBE WITH RELIABLE CDN PATH */}
-      <Environment
-        preset="apartment"
-        path="https://unpkg.com/@react-three/drei@latest/assets/hdri/"
-      />
-
-      <ambientLight intensity={isNightMode ? 0.02 : 0.4} color={isNightMode ? "#0a0f1d" : "#ffffff"} />
+      <ambientLight intensity={isNightMode ? 0.02 : 0.35} color={isNightMode ? "#0a0f1d" : "#ffffff"} />
       {!isNightMode && (
         <directionalLight
           position={[4, 8, 4]}
-          intensity={0.7}
+          intensity={0.5}
           color="#ffffff"
           castShadow
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
           shadow-bias={-0.0001}
-          shadow-normalBias={0.02}
         />
       )}
 
@@ -239,19 +260,17 @@ function ClientInteractiveCanvas({
         );
       })}
 
-      {clonedScene && (
-        <primitive
-          object={clonedScene}
-          onClick={(e: ThreeEvent<MouseEvent>) => {
-            e.stopPropagation();
-            if (e.object instanceof THREE.Mesh) {
-              const rawName = e.object.name || e.object.uuid;
-              const targetName = WALL_MAPPING[rawName] || rawName;
-              onSurfaceSelect(targetName);
-            }
-          }}
-        />
-      )}
+      <primitive
+        object={clonedScene}
+        onClick={(e: ThreeEvent<MouseEvent>) => {
+          e.stopPropagation();
+          if (e.object instanceof THREE.Mesh) {
+            const rawName = e.object.name || e.object.uuid;
+            const targetName = WALL_MAPPING[rawName] || rawName;
+            onSurfaceSelect(targetName);
+          }
+        }}
+      />
 
       <OrbitControls
         ref={controlsRef}
@@ -345,14 +364,6 @@ export default function PublicProfileAndConceptPage() {
     const resolvePublicDataStream = async () => {
       setIsLoading(true);
       try {
-        // 🎯 STAGE 0: INTERCEPT HOUSING TEMPLATE IDs TO PREVENT 'PROFILE ABSENT' ERRORS
-        if (targetId.startsWith("tmpl_")) {
-          if (isSubscribed) {
-            router.push(`/workspace?template=${targetId}`);
-          }
-          return;
-        }
-
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
 
         // 🎯 1. Direct Client Hub Saved Remix Lookup (`visualizations` table)
@@ -436,39 +447,37 @@ export default function PublicProfileAndConceptPage() {
         }
 
         // 🎯 2. Check Share Links table (`shared_visualizations`)
-        if (isUuid) {
-          const shareRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`).catch(() => null);
+        const shareRes = await fetch(`${BACKEND_API_URL}/api/visualizations/share/${targetId}`).catch(() => null);
 
-          if (shareRes && shareRes.ok) {
-            const conceptBody = await shareRes.json();
-            const conceptData = conceptBody.data as SharedDataPayload;
-            setSharedConcept(conceptData);
-            setRoomColors(conceptData.room_data || {});
-            setIs3DConceptShare(true);
+        if (shareRes && shareRes.ok) {
+          const conceptBody = await shareRes.json();
+          const conceptData = conceptBody.data as SharedDataPayload;
+          setSharedConcept(conceptData);
+          setRoomColors(conceptData.room_data || {});
+          setIs3DConceptShare(true);
 
-            const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
-            const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
+          const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
+          const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
 
-            if (templateRes && templateRes.ok) {
-              const templateData = await templateRes.json();
-              if (templateData.lighting_settings) {
-                setBulbs(
-                  templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
-                    ...light,
-                    name: `Bulb #${index + 1}`,
-                    enabled: light.visible !== undefined ? light.visible : true,
-                    visible: light.visible !== undefined ? light.visible : true
-                  }))
-                );
-              }
-              if (templateData.camera_settings) setCameraConfig(templateData.camera_settings);
+          if (templateRes && templateRes.ok) {
+            const templateData = await templateRes.json();
+            if (templateData.lighting_settings) {
+              setBulbs(
+                templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+                  ...light,
+                  name: `Bulb #${index + 1}`,
+                  enabled: light.visible !== undefined ? light.visible : true,
+                  visible: light.visible !== undefined ? light.visible : true
+                }))
+              );
             }
-            setIsLoading(false);
-            return;
+            if (templateData.camera_settings) setCameraConfig(templateData.camera_settings);
           }
+          setIsLoading(false);
+          return;
         }
 
-        // 🎯 3. Fallback - Painter Profile Lookup (Fired if not an operational UUID)
+        // 🎯 3. Fallback - Painter Profile Lookup
         const [profileRes, conceptsRes] = await Promise.all([
           fetch(`${BACKEND_API_URL}/api/profile/${targetId}`).catch(() => null),
           fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`).catch(() => null)
@@ -494,7 +503,7 @@ export default function PublicProfileAndConceptPage() {
     return () => {
       isSubscribed = false;
     };
-  }, [targetId, BACKEND_API_URL, router]);
+  }, [targetId, BACKEND_API_URL]);
 
   useEffect(() => {
     const lockOrientation = async () => {
@@ -618,7 +627,8 @@ export default function PublicProfileAndConceptPage() {
         message: "Could not import design asset parameters.",
         severity: "error",
       });
-    } finally {
+    }
+    finally {
       setImporting(false);
     }
   };
