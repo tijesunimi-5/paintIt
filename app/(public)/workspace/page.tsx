@@ -10,6 +10,8 @@ import { useAlert } from "@/context/AlertContext";
 import WorkspaceCanvas from "@/components/canvas/WorkspaceCanvas";
 import PaintPicker, { CustomColor } from "@/components/canvas/PaintPicker";
 import LightControls, { BulbState } from "@/components/canvas/LightControls";
+import ClientTexturePicker from "@/components/canvas/ClientTexturePicker";
+import { TextureCategory } from "@/utils/generateFloorTextures";
 
 export interface DBCameraConfig {
   position?: [number, number, number];
@@ -41,8 +43,13 @@ function WorkspaceContent() {
   const urlTemplateId = searchParams?.get("template") || "tmpl_hostel_lux";
 
   // System UI Panels States
-  const [activeTab, setActiveTab] = useState<"paint" | "lighting">("paint");
+  const [activeTab, setActiveTab] = useState<"paint" | "texture" | "lighting">("paint");
   const [activeSurface, setActiveSurface] = useState<string>("wallFront");
+  const [activeTextures, setActiveTextures] = useState<Record<TextureCategory, string>>({
+    FLOOR: "original",
+    WARDROBE: "original",
+    DOOR: "original",
+  });
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Custom Save Modal States
@@ -250,7 +257,7 @@ function WorkspaceContent() {
     document.removeEventListener("touchend", stopDrag);
   };
 
-  const handleTabFABClick = (tab: "paint" | "lighting") => {
+  const handleTabFABClick = (tab: "paint" | "texture" | "lighting") => {
     setActiveTab(tab);
     setIsPanelCollapsed(false);
   };
@@ -364,6 +371,7 @@ function WorkspaceContent() {
             bulbs={bulbs}
             cameraConfig={cameraConfig}
             roomTextures={{}}
+            activeTextures={activeTextures}
             isNightMode={isNightMode}
           />
         </Canvas>
@@ -379,20 +387,33 @@ function WorkspaceContent() {
         </button>
         <button
           onClick={() => handleTabFABClick("paint")}
-          className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "paint" && !isPanelCollapsed
-            ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-            : "bg-neutral-900/90 border-neutral-800 text-white"
-            }`}
+          className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${
+            activeTab === "paint" && !isPanelCollapsed
+              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+              : "bg-neutral-900/90 border-neutral-800 text-white"
+          }`}
           title="Paint Picker"
         >
           🎨
         </button>
         <button
+          onClick={() => handleTabFABClick("texture")}
+          className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${
+            activeTab === "texture" && !isPanelCollapsed
+              ? "bg-amber-500 border-amber-400 text-neutral-950"
+              : "bg-neutral-900/90 border-neutral-800 text-white"
+          }`}
+          title="Texture & Materials"
+        >
+          🪵
+        </button>
+        <button
           onClick={() => handleTabFABClick("lighting")}
-          className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "lighting" && !isPanelCollapsed
-            ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-            : "bg-neutral-900/90 border-neutral-800 text-white"
-            }`}
+          className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${
+            activeTab === "lighting" && !isPanelCollapsed
+              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+              : "bg-neutral-900/90 border-neutral-800 text-white"
+          }`}
           title="Bulb Switches"
         >
           💡
@@ -425,6 +446,14 @@ function WorkspaceContent() {
               setRoomColors={setRoomColors}
               customColors={customColors}
               setCustomColors={setCustomColors}
+            />
+          )}
+          {activeTab === "texture" && (
+            <ClientTexturePicker
+              activeTextures={activeTextures}
+              onTextureSelect={(category, textureId) =>
+                setActiveTextures((prev) => ({ ...prev, [category]: textureId }))
+              }
             />
           )}
           {activeTab === "lighting" && (

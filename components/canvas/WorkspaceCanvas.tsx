@@ -8,6 +8,7 @@ import { GLTF, OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { BulbState } from '@/components/canvas/LightControls';
 import { DBCameraConfig } from '@/app/(public)/workspace/page';
 import { generateWallNormalMap } from '@/utils/generateWallNormalMaps';
+import { TEXTURE_PRESETS, TextureCategory } from '@/utils/generateFloorTextures';
 
 interface CanvasProps {
   modelUrl: string;
@@ -17,6 +18,7 @@ interface CanvasProps {
   bulbs: BulbState[];
   cameraConfig: DBCameraConfig;
   roomTextures?: Record<string, string>;
+  activeTextures?: Record<TextureCategory, string>;
   isNightMode?: boolean;
 }
 
@@ -40,6 +42,8 @@ export default function WorkspaceCanvas({
   onSurfaceSelect,
   bulbs,
   cameraConfig,
+  roomTextures,
+  activeTextures,
   isNightMode = false
 }: CanvasProps) {
   const { scene } = useGLTF(modelUrl) as unknown as GLTFResult;
@@ -106,49 +110,81 @@ export default function WorkspaceCanvas({
     controlsRef.current.update();
   });
 
-  // ⚡ OPTIMIZED MESH TRAVERSAL: Update color values directly without recreating materials
+  // ⚡ OPTIMIZED MESH TRAVERSAL: Update materials for walls & textures for floor/furniture
   useEffect(() => {
     if (!clonedScene) return;
-
-    console.log("🎨 [Workspace Canvas] Traversing Scene. roomColors:", roomColors);
 
     clonedScene.traverse((node: THREE.Object3D) => {
       if (node instanceof THREE.Mesh) {
         const meshName = node.name;
         if (!node.visible) return; // Skip hidden duplicate exterior walls
 
-        if (node.material instanceof THREE.MeshStandardMaterial) {
-          const targetKey = WALL_MAPPING[meshName] || meshName;
+        node.receiveShadow = true;
+        node.castShadow = true;
 
-          // Shadow mapping depth setups
-          node.receiveShadow = true;
-          node.castShadow = true;
+        const targetKey = WALL_MAPPING[meshName] || meshName;
+        const isWallSurface = targetKey.startsWith('wall') || targetKey === 'ceiling';
+        const isFloor = targetKey === 'floor' || meshName === 'Cube.011';
+        const isWardrobe = targetKey === 'wardrobe' || meshName === 'Cube.008';
+        const isDoor = targetKey === 'door' || meshName === 'Mesh.091';
 
-          if (roomColors[targetKey]) {
-            console.log(`🖌️ [Workspace Canvas] Painting ${meshName} (${targetKey}) -> ${roomColors[targetKey]}`);
-            // Clone shared materials to prevent cross-surface color bleeding
-            node.material = node.material.clone();
-            node.material.side = THREE.DoubleSide; // Support flipped normals
-            // Color.set() updates RGB in-place
-            node.material.color.set(roomColors[targetKey]);
-
-            // Apply plaster bumps to walls to simulate paint roller orange-peel texture
-            if (targetKey.startsWith('wall')) {
-              node.material.bumpMap = wallNormalMap;
-              node.material.bumpScale = 0.015;
-              node.material.roughness = 0.85; // Matte finish scatter
-
-              // Enable polygon offset to prevent overlapping mesh z-fighting
-              node.material.polygonOffset = true;
-              node.material.polygonOffsetFactor = -1;
-              node.material.polygonOffsetUnits = -1;
-            }
+        if (isFloor && activeTextures?.FLOOR && activeTextures.FLOOR !== "original") {
+          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.FLOOR);
+          if (preset) {
+            const mat = new THREE.MeshStandardMaterial({
+              map: preset.generateTexture(),
+              roughness: preset.roughness,
+              metalness: preset.metalness,
+              side: THREE.DoubleSide,
+            });
+            if (preset.clearcoat) (mat as unknown as { clearcoat: number }).clearcoat = preset.clearcoat;
+            node.material = mat;
             node.material.needsUpdate = true;
           }
+        } else if (isWardrobe && activeTextures?.WARDROBE && activeTextures.WARDROBE !== "original") {
+          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.WARDROBE);
+          if (preset) {
+            node.material = new THREE.MeshStandardMaterial({
+              map: preset.generateTexture(),
+              roughness: preset.roughness,
+              metalness: preset.metalness,
+              side: THREE.DoubleSide,
+            });
+            node.material.needsUpdate = true;
+          }
+        } else if (isDoor && activeTextures?.DOOR && activeTextures.DOOR !== "original") {
+          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.DOOR);
+          if (preset) {
+            node.material = new THREE.MeshStandardMaterial({
+              map: preset.generateTexture(),
+              roughness: preset.roughness,
+              metalness: preset.metalness,
+              side: THREE.DoubleSide,
+            });
+            node.material.needsUpdate = true;
+          }
+        } else if (isWallSurface && roomColors[targetKey] && node.material instanceof THREE.MeshStandardMaterial) {
+          // Clone shared materials to prevent cross-surface color bleeding
+          node.material = node.material.clone();
+          node.material.side = THREE.DoubleSide; // Support flipped normals
+          node.material.color.set(roomColors[targetKey]);
+
+          // Apply plaster bumps to walls to simulate paint roller orange-peel texture
+          if (targetKey.startsWith('wall')) {
+            node.material.bumpMap = wallNormalMap;
+            node.material.bumpScale = 0.015;
+            node.material.roughness = 0.85; // Matte finish scatter
+
+            // Enable polygon offset to prevent overlapping mesh z-fighting
+            node.material.polygonOffset = true;
+            node.material.polygonOffsetFactor = -1;
+            node.material.polygonOffsetUnits = -1;
+          }
+          node.material.needsUpdate = true;
         }
       }
     });
-  }, [clonedScene, roomColors, wallNormalMap]);
+  }, [clonedScene, roomColors, wallNormalMap, activeTextures]);
 
   return (
     <>

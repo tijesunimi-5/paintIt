@@ -13,6 +13,8 @@ import { useAlert } from "@/context/AlertContext";
 // Modular Dashboard Components
 import PaintPicker, { CustomColor } from "@/components/canvas/ClientPaintPicker";
 import LightControls, { BulbState } from "@/components/canvas/LightControls";
+import ClientTexturePicker from "@/components/canvas/ClientTexturePicker";
+import { TEXTURE_PRESETS, TextureCategory } from "@/utils/generateFloorTextures";
 import { DBRawLight } from "../../workspace/page";
 import { PAINT_FINISH_PRESETS, PaintFinishId } from "@/config/paintFinishes";
 import { generateWallNormalMap } from "@/utils/generateWallNormalMaps";
@@ -85,15 +87,17 @@ function ClientInteractiveCanvas({
   bulbs,
   cameraConfig,
   isNightMode,
-  activeFinish = "EMULSION",
+  activeFinish = 'EMULSION',
+  activeTextures,
 }: {
   modelUrl: string;
   roomColors: Record<string, string>;
-  onSurfaceSelect: (meshName: string) => void;
+  onSurfaceSelect?: (meshName: string) => void;
   bulbs: BulbState[];
   cameraConfig: DBCameraConfig;
   isNightMode: boolean;
   activeFinish?: PaintFinishId;
+  activeTextures?: Record<TextureCategory, string>;
 }) {
   const { scene } = useGLTF(modelUrl);
   const clonedScene = React.useMemo(() => {
@@ -128,42 +132,6 @@ function ClientInteractiveCanvas({
     }
   }, [cameraConfig]);
 
-  // useEffect(() => {
-  //   scene.traverse((node: THREE.Object3D) => {
-  //     if (node instanceof THREE.Mesh) {
-  //       node.castShadow = true;
-  //       node.receiveShadow = true;
-
-  //       // Upgrade material to MeshPhysicalMaterial for clearcoat & sheen rendering
-  //       if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
-  //         const oldMat = node.material;
-  //         node.material = new THREE.MeshPhysicalMaterial({
-  //           color: oldMat.color,
-  //           map: oldMat.map || null,
-  //         });
-  //       }
-
-  //       const mat = node.material as THREE.MeshPhysicalMaterial;
-
-  //       // Apply finish sheen properties
-  //       mat.roughness = roughness;
-  //       mat.metalness = metalness;
-  //       mat.clearcoat = clearcoat || 0;
-  //       mat.clearcoatRoughness = clearcoatRoughness || 0.1;
-  //       mat.envMapIntensity = envMapIntensity;
-
-  //       // Apply roller bump texture to wall surfaces
-  //       mat.bumpMap = wallNormalMap;
-  //       mat.bumpScale = bumpScale;
-
-  //       if (roomColors[node.name]) {
-  //         mat.color.set(roomColors[node.name]);
-  //       }
-  //       mat.needsUpdate = true;
-  //     }
-  //   });
-  // }, [scene, roomColors, activeFinish, roughness, metalness, clearcoat, clearcoatRoughness, bumpScale, envMapIntensity, wallNormalMap]);
-
   useEffect(() => {
     if (!clonedScene) return;
 
@@ -176,9 +144,47 @@ function ClientInteractiveCanvas({
         node.receiveShadow = true;
 
         const targetKey = WALL_MAPPING[meshName] || meshName;
-        const isWallSurface = Boolean(roomColors[targetKey]);
+        const isWallSurface = targetKey.startsWith('wall') || targetKey === 'ceiling';
+        const isFloor = targetKey === 'floor' || meshName === 'Cube.011';
+        const isWardrobe = targetKey === 'wardrobe' || meshName === 'Cube.008';
+        const isDoor = targetKey === 'door' || meshName === 'Mesh.091';
 
-        if (isWallSurface) {
+        if (isFloor && activeTextures?.FLOOR && activeTextures.FLOOR !== "original") {
+          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.FLOOR);
+          if (preset) {
+            const mat = new THREE.MeshStandardMaterial({
+              map: preset.generateTexture(),
+              roughness: preset.roughness,
+              metalness: preset.metalness,
+              side: THREE.DoubleSide,
+            });
+            if (preset.clearcoat) (mat as unknown as { clearcoat: number }).clearcoat = preset.clearcoat;
+            node.material = mat;
+            node.material.needsUpdate = true;
+          }
+        } else if (isWardrobe && activeTextures?.WARDROBE && activeTextures.WARDROBE !== "original") {
+          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.WARDROBE);
+          if (preset) {
+            node.material = new THREE.MeshStandardMaterial({
+              map: preset.generateTexture(),
+              roughness: preset.roughness,
+              metalness: preset.metalness,
+              side: THREE.DoubleSide,
+            });
+            node.material.needsUpdate = true;
+          }
+        } else if (isDoor && activeTextures?.DOOR && activeTextures.DOOR !== "original") {
+          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.DOOR);
+          if (preset) {
+            node.material = new THREE.MeshStandardMaterial({
+              map: preset.generateTexture(),
+              roughness: preset.roughness,
+              metalness: preset.metalness,
+              side: THREE.DoubleSide,
+            });
+            node.material.needsUpdate = true;
+          }
+        } else if (isWallSurface && roomColors[targetKey]) {
           if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
             const oldMat = node.material;
             node.material = new THREE.MeshPhysicalMaterial({
@@ -223,6 +229,7 @@ function ClientInteractiveCanvas({
     bumpScale,
     envMapIntensity,
     wallNormalMap,
+    activeTextures,
   ]);
   
 
@@ -267,7 +274,7 @@ function ClientInteractiveCanvas({
           if (e.object instanceof THREE.Mesh) {
             const rawName = e.object.name || e.object.uuid;
             const targetName = WALL_MAPPING[rawName] || rawName;
-            onSurfaceSelect(targetName);
+            if (onSurfaceSelect) onSurfaceSelect(targetName);
           }
         }}
       />
@@ -296,8 +303,13 @@ export default function PublicProfileAndConceptPage() {
   const targetId = (params?.sharedId || params?.id) as string;
 
   // View UI Panels Configurations
-  const [activeTab, setActiveTab] = useState<"paint" | "lighting">("paint");
+  const [activeTab, setActiveTab] = useState<"paint" | "texture" | "lighting">("paint");
   const [activeSurface, setActiveSurface] = useState<string>("wallFront");
+  const [activeTextures, setActiveTextures] = useState<Record<TextureCategory, string>>({
+    FLOOR: "original",
+    WARDROBE: "original",
+    DOOR: "original",
+  });
   const [panelHeight, setPanelHeight] = useState<number>(320);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false);
   const isDragging = useRef<boolean>(false);
@@ -728,6 +740,7 @@ export default function PublicProfileAndConceptPage() {
                 cameraConfig={cameraConfig}
                 isNightMode={isNightMode}
                 activeFinish={activeFinish}
+                activeTextures={activeTextures}
               />
             </Suspense>
           </Canvas>
@@ -737,19 +750,34 @@ export default function PublicProfileAndConceptPage() {
         <div className="absolute right-4 bottom-75 z-20 flex flex-col gap-2">
           <button
             onClick={() => { setActiveTab("paint"); setIsPanelCollapsed(false); }}
-            className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "paint" && !isPanelCollapsed
-              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-              : "bg-neutral-900/90 border-neutral-800 text-white"
-              }`}
+            className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${
+              activeTab === "paint" && !isPanelCollapsed
+                ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+                : "bg-neutral-900/90 border-neutral-800 text-white"
+            }`}
+            title="Paint Picker"
           >
             🎨
           </button>
           <button
+            onClick={() => { setActiveTab("texture"); setIsPanelCollapsed(false); }}
+            className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${
+              activeTab === "texture" && !isPanelCollapsed
+                ? "bg-amber-500 border-amber-400 text-neutral-950"
+                : "bg-neutral-900/90 border-neutral-800 text-white"
+            }`}
+            title="Texture & Materials"
+          >
+            🪵
+          </button>
+          <button
             onClick={() => { setActiveTab("lighting"); setIsPanelCollapsed(false); }}
-            className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${activeTab === "lighting" && !isPanelCollapsed
-              ? "bg-emerald-500 border-emerald-400 text-neutral-950"
-              : "bg-neutral-900/90 border-neutral-800 text-white"
-              }`}
+            className={`w-10 h-10 rounded-full border flex items-center justify-center shadow-2xl transition-all ${
+              activeTab === "lighting" && !isPanelCollapsed
+                ? "bg-emerald-500 border-emerald-400 text-neutral-950"
+                : "bg-neutral-900/90 border-neutral-800 text-white"
+            }`}
+            title="Bulb Switches"
           >
             💡
           </button>
@@ -785,6 +813,14 @@ export default function PublicProfileAndConceptPage() {
                 isReadOnly={true}
                 activeFinish={activeFinish}
                 onFinishChange={setActiveFinish}
+              />
+            )}
+            {activeTab === "texture" && (
+              <ClientTexturePicker
+                activeTextures={activeTextures}
+                onTextureSelect={(category, textureId) =>
+                  setActiveTextures((prev) => ({ ...prev, [category]: textureId }))
+                }
               />
             )}
             {activeTab === "lighting" && (
