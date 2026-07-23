@@ -1,18 +1,18 @@
-// app/(auth)/login/page.tsx
-"use client";
-
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useAlert } from "@/context/AlertContext";
+import { useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+function LoginContent() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
 
   const { login } = useAuth();
-  const { showToast } = useAlert(); // Accesses your exact toast system safely
+  const { showToast } = useAlert();
+  const searchParams = useSearchParams();
+  const redirect = searchParams?.get("redirect");
 
   const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -37,7 +37,6 @@ export default function LoginPage() {
 
       const data = await response.json();
 
-      // Catch common unverified user flows from the database model
       if (response.status === 403 && data.error?.includes("verify")) {
         sessionStorage.setItem("paintit_verification_email", email.toLowerCase().trim());
         showToast({ message: "Account unverified. Redirecting to OTP activation grid.", severity: "info" });
@@ -51,13 +50,18 @@ export default function LoginPage() {
 
       showToast({ message: "Access validated! Syncing system configuration components...", severity: "success" });
 
-      // ✅ FIX: Extract data.user.fullName to match what your backend auth router transmits
       login(data.accessToken, data.refreshToken, {
         id: data.user.id,
         email: data.user.email,
         fullName: data.user.fullName || data.user.full_name || "User Account",
         role: data.user.role
       });
+
+      if (redirect) {
+        setTimeout(() => {
+          window.location.href = redirect;
+        }, 100);
+      }
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unexpected login security error occurred.";
@@ -69,15 +73,12 @@ export default function LoginPage() {
 
   return (
     <div className="space-y-6 text-white animate-fade-in">
-
       <div className="text-center">
         <h2 className="text-xl font-black tracking-tight text-neutral-100">Sign In to Studio OS</h2>
         <p className="text-xs text-neutral-500 mt-1.5">Manage layout bids, 3D portfolios, and project metrics.</p>
       </div>
 
       <form onSubmit={handleExecuteLogin} className="space-y-4">
-
-        {/* Email Address Form Target Field Input Slot */}
         <div className="space-y-1.5">
           <label htmlFor="email" className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">Email Address</label>
           <input
@@ -92,7 +93,6 @@ export default function LoginPage() {
           />
         </div>
 
-        {/* Password Entry Security Slot */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label htmlFor="password" className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">Password</label>
@@ -112,7 +112,6 @@ export default function LoginPage() {
           />
         </div>
 
-        {/* Action Button Handler Trigger Control Block */}
         <button
           type="submit"
           disabled={submitting}
@@ -126,14 +125,20 @@ export default function LoginPage() {
         </button>
       </form>
 
-      {/* Visual Workspace Account Type Navigation Routing Signpost Footer */}
       <div className="text-center text-xs text-neutral-500 border-t border-neutral-800/60 pt-4">
         Don&apos;t have an active workspace account?{" "}
         <Link href="/register" className="text-emerald-400 font-bold hover:underline">
           Register Here
         </Link>
       </div>
-
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading login page...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }

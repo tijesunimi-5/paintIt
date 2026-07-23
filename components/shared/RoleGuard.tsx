@@ -32,7 +32,7 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ children, allowedRole }) =
       // 🔒 2. Absolute Token Check
       if (!accessToken) {
         setServerVerifying(false);
-        router.replace('/login');
+        router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
         return;
       }
 

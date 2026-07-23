@@ -618,6 +618,43 @@ export default function PublicProfileAndConceptPage() {
     };
   }, []);
 
+  // 🔄 RESTORE DESIGN DRAFT CONFIGURATION FROM GUEST SESSION
+  useEffect(() => {
+    if (isLoading || !targetId) return;
+    if (typeof window !== "undefined") {
+      const savedDraft = localStorage.getItem(`paintit_draft_${targetId}`);
+      if (savedDraft) {
+        try {
+          const parsed = JSON.parse(savedDraft);
+          if (parsed.roomColors) setRoomColors(parsed.roomColors);
+          if (parsed.activeFinish) setActiveFinish(parsed.activeFinish);
+          if (parsed.activeTextures) setActiveTextures(parsed.activeTextures);
+          if (parsed.bulbs) setBulbs(parsed.bulbs);
+          console.log("🔄 Restored design draft config from guest session.");
+          
+          // Clear draft instantly on restore so it doesn't loop overwrite future fresh changes
+          localStorage.removeItem(`paintit_draft_${targetId}`);
+        } catch (e) {
+          console.error("Draft recovery error:", e);
+        }
+      }
+    }
+  }, [isLoading, targetId]);
+
+  // 💾 AUTO-SAVE ACTIVE CONFIGURATIONS
+  useEffect(() => {
+    if (isLoading || !targetId) return;
+    if (typeof window !== "undefined") {
+      const draft = {
+        roomColors,
+        activeFinish,
+        activeTextures,
+        bulbs
+      };
+      localStorage.setItem(`paintit_draft_${targetId}`, JSON.stringify(draft));
+    }
+  }, [roomColors, activeFinish, activeTextures, bulbs, targetId, isLoading]);
+
   const handleSaveToClientHub = async () => {
     const activeToken =
       accessToken ||
@@ -1021,7 +1058,14 @@ export default function PublicProfileAndConceptPage() {
                   <div className="pt-2 border-t border-neutral-950 text-[10px] text-neutral-500">
                     Already have access?{" "}
                     <button
-                      onClick={() => router.push("/login")}
+                      onClick={() => {
+                        if (typeof window !== "undefined") {
+                          const currentPath = window.location.pathname + window.location.search;
+                          router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+                        } else {
+                          router.push("/login");
+                        }
+                      }}
                       className="text-amber-500 hover:underline font-bold"
                     >
                       Log In
