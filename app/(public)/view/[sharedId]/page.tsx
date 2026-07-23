@@ -322,6 +322,14 @@ export default function PublicProfileAndConceptPage() {
   const [clientMessage, setClientMessage] = useState<string>("");
   const [sendingFeedback, setSendingFeedback] = useState<boolean>(false);
 
+  // Early Access Waitlist States
+  const [waitlistModalOpen, setWaitlistModalOpen] = useState<boolean>(false);
+  const [waitlistName, setWaitlistName] = useState<string>("");
+  const [waitlistEmail, setWaitlistEmail] = useState<string>("");
+  const [waitlistPhone, setWaitlistPhone] = useState<string>("");
+  const [submittingWaitlist, setSubmittingWaitlist] = useState<boolean>(false);
+  const [waitlistSuccess, setWaitlistSuccess] = useState<boolean>(false);
+
   // Shared Core Matrices
   const [is3DConceptShare, setIs3DConceptShare] = useState<boolean>(false);
   const [sharedConcept, setSharedConcept] = useState<SharedDataPayload | null>(null);
@@ -516,6 +524,67 @@ export default function PublicProfileAndConceptPage() {
       isSubscribed = false;
     };
   }, [targetId, BACKEND_API_URL]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    const hasSeenWaitlist = typeof window !== "undefined" ? localStorage.getItem("paintit_seen_waitlist") : null;
+    if (!accessToken && !hasSeenWaitlist) {
+      const timer = setTimeout(() => {
+        setWaitlistModalOpen(true);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("paintit_seen_waitlist", "true");
+        }
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [accessToken, isLoading]);
+
+  const handleJoinWaitlist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waitlistEmail.trim()) return;
+
+    setSubmittingWaitlist(true);
+    try {
+      const res = await fetch(`${BACKEND_API_URL}/api/leads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: waitlistEmail.trim(),
+          source: "WAITLIST_SIGNUP",
+          metaTracking: {
+            clientName: waitlistName.trim() || "Waitlist Member",
+            phone: waitlistPhone.trim(),
+            message: "Joined waitlist from shared 3D visualization page.",
+            shareId: targetId
+          }
+        })
+      });
+
+      if (res.ok) {
+        setWaitlistSuccess(true);
+        showToast({
+          message: "Thank you! You have successfully joined the waitlist.",
+          severity: "success"
+        });
+        setTimeout(() => {
+          setWaitlistModalOpen(false);
+        }, 2500);
+      } else {
+        showToast({
+          message: "Failed to join waitlist. Please try again.",
+          severity: "error"
+        });
+      }
+    } catch (err) {
+      console.error("Waitlist error:", err);
+      showToast({
+        message: "A network error occurred. Please try again.",
+        severity: "error"
+      });
+    } finally {
+      setSubmittingWaitlist(false);
+    }
+  };
 
   useEffect(() => {
     const lockOrientation = async () => {
@@ -873,6 +942,103 @@ export default function PublicProfileAndConceptPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* 🎫 WAITLIST & PRIVATE BETA POPUP CAPTURE */}
+        {waitlistModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+            <div className="w-full max-w-md bg-neutral-900 border border-neutral-850 p-6 rounded-2xl shadow-2xl space-y-5 text-center relative overflow-hidden">
+              <button
+                onClick={() => setWaitlistModalOpen(false)}
+                className="absolute top-4 right-4 text-neutral-500 hover:text-white transition-colors text-sm"
+              >
+                ✕
+              </button>
+
+              {!waitlistSuccess ? (
+                <>
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-amber-500 block">
+                      PaintIT Studio — Waitlist Portal
+                    </span>
+                    <h3 className="text-xl font-serif text-neutral-100 leading-tight">
+                      See It Before <span className="italic font-light text-amber-300">You Paint It.</span>
+                    </h3>
+                    <p className="text-[11px] text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                      We are currently in private beta. Join our early access waitlist to save your custom color remixes, toggle night modes, and connect with local painters.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleJoinWaitlist} className="space-y-3.5 text-left pt-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono uppercase tracking-wider text-neutral-400 block">Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Sarah Connor"
+                        value={waitlistName}
+                        onChange={(e) => setWaitlistName(e.target.value)}
+                        className="w-full bg-black border border-neutral-800 focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-700 focus:outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono uppercase tracking-wider text-neutral-400 block">Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="e.g. sarah@paintit.app"
+                        value={waitlistEmail}
+                        onChange={(e) => setWaitlistEmail(e.target.value)}
+                        className="w-full bg-black border border-neutral-800 focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-700 focus:outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono uppercase tracking-wider text-neutral-400 block">WhatsApp Phone (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. +234 80 1234 5678"
+                        value={waitlistPhone}
+                        onChange={(e) => setWaitlistPhone(e.target.value)}
+                        className="w-full bg-black border border-neutral-800 focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-700 focus:outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="pt-2">
+                      <button
+                        type="submit"
+                        disabled={submittingWaitlist}
+                        className="w-full py-2.5 bg-neutral-100 hover:bg-white text-neutral-950 text-[10px] font-mono font-bold uppercase tracking-wider rounded-xl shadow-lg transition-all active:scale-[0.98] disabled:bg-neutral-800 disabled:text-neutral-500 flex items-center justify-center gap-1"
+                      >
+                        {submittingWaitlist ? "Registering..." : "Join Early Access Waitlist ➔"}
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="pt-2 border-t border-neutral-950 text-[10px] text-neutral-500">
+                    Already have access?{" "}
+                    <button
+                      onClick={() => router.push("/login")}
+                      className="text-amber-500 hover:underline font-bold"
+                    >
+                      Log In
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="py-8 space-y-3 animate-fade-in">
+                  <div className="w-12 h-12 bg-emerald-950 border border-emerald-500 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-xl font-bold">
+                    ✓
+                  </div>
+                  <h4 className="text-sm font-black uppercase tracking-wider text-emerald-400">Welcome Aboard!</h4>
+                  <p className="text-[11px] text-neutral-400 leading-relaxed max-w-xs mx-auto">
+                    You have successfully joined the early access waitlist. We will send your invitation link to <span className="text-white font-bold">{waitlistEmail}</span> shortly.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

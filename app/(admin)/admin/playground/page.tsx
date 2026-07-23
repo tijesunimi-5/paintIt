@@ -15,7 +15,7 @@ interface DesignTemplate {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-export default function StudioDashboard() {
+export default function AdminPlaygroundCatalog() {
   const [catalog, setCatalog] = useState<DesignTemplate[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const router = useRouter();
@@ -71,7 +71,7 @@ export default function StudioDashboard() {
 
       if (res.ok) {
         showToast({ message: '✨ Fresh 3D studio frame initialized!', severity: 'success' });
-        router.push(`/playground/${newId}`); // Boot straight into editor view
+        router.push(`/admin/playground/${newId}`); // Boot straight into editor view
       } else {
         showToast({ message: '❌ Server refused layout initialization setup.', severity: 'error' });
       }
@@ -118,7 +118,7 @@ export default function StudioDashboard() {
             {catalog.map((item) => (
               <div
                 key={item.id}
-                onClick={() => router.push(`/playground/${item.id}`)}
+                onClick={() => router.push(`/admin/playground/${item.id}`)}
                 className="group relative cursor-pointer border border-neutral-800 bg-neutral-900/50 hover:bg-neutral-900 rounded-xl p-5 shadow-xl hover:border-cyan-500/40 transition-all flex flex-col justify-between"
               >
                 <div className="absolute top-4 right-4 text-lg bg-neutral-950 p-2 rounded-lg group-hover:scale-110 transition-transform">
