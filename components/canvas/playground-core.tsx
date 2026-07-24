@@ -18,11 +18,9 @@ interface GizmoProps {
 }
 
 export function AdminTransformGizmo({ activeLight, mode, onTransformUpdate }: GizmoProps) {
-  const transformRef = useRef<TransformControlsImpl>(null);
-
-  const handleObjectChange = (e: THREE.Event | undefined) => {
+  const handleMouseUp = (e?: any) => {
     if (!e || !e.target) return;
-    const targetControls = e.target as { object?: THREE.Object3D };
+    const targetControls = e.target as unknown as { object?: THREE.Object3D };
     const obj = targetControls.object;
     if (!obj) return;
 
@@ -49,13 +47,12 @@ export function AdminTransformGizmo({ activeLight, mode, onTransformUpdate }: Gi
 
   return (
     <TransformControls
-      ref={transformRef}
       mode={mode}
       size={0.75}
       position={activeLight.position}
       rotation={activeLight.rotation}
       scale={activeLight.scale}
-      onChange={handleObjectChange}
+      onMouseUp={handleMouseUp}
     >
       <mesh>
         <sphereGeometry args={[0.04, 16, 16]} />
@@ -141,17 +138,30 @@ export function StudioBlenderModelMesh({
 
   useEffect(() => {
     if (scene && materials && onModelLoaded) {
-      const materialNames = Object.keys(materials);
+      const allMaterialSet = new Set<string>(Object.keys(materials));
       const meshList: { name: string; originalMaterial: string }[] = [];
+
       scene.traverse((node) => {
         if (node instanceof THREE.Mesh) {
           const matName = node.material && (node.material as THREE.Material).name;
+          if (matName) allMaterialSet.add(matName);
           meshList.push({
             name: node.name,
             originalMaterial: matName || 'default'
           });
         }
+
+        // Enable Blender imported punctual lights
+        if (node instanceof THREE.Light) {
+          node.castShadow = true;
+          if (node.intensity > 0 && node.intensity < 5.0) {
+            node.intensity = node.intensity * 10;
+          }
+          console.log(`💡 [Playground Canvas] Enabled Blender Light: ${node.name} (${node.type}), intensity: ${node.intensity}`);
+        }
       });
+
+      const materialNames = Array.from(allMaterialSet);
       onModelLoaded(materialNames, meshList);
     }
   }, [scene, materials, onModelLoaded]);

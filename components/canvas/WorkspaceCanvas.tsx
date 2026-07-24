@@ -68,21 +68,34 @@ export default function WorkspaceCanvas({
     return clone;
   }, [scene]);
 
-  // Extract all meshes and materials to notify parent component
+  // Extract all meshes and materials to notify parent component & configure Blender lights
   useEffect(() => {
     if (scene && materials && onModelLoaded) {
-      const materialNames = Object.keys(materials);
+      const allMaterialSet = new Set<string>(Object.keys(materials));
       const meshList: { name: string; originalMaterial: string }[] = [];
+
       scene.traverse((node) => {
         if (node instanceof THREE.Mesh) {
           const matName = node.material && (node.material as THREE.Material).name;
+          if (matName) allMaterialSet.add(matName);
           meshList.push({
             name: node.name,
             originalMaterial: matName || 'default'
           });
         }
+
+        // Enable Blender imported punctual lights
+        if (node instanceof THREE.Light) {
+          node.castShadow = true;
+          if (node.intensity > 0 && node.intensity < 5.0) {
+            node.intensity = node.intensity * 10;
+          }
+          console.log(`💡 [Workspace Canvas] Enabled Blender Light: ${node.name} (${node.type}), intensity: ${node.intensity}`);
+        }
       });
-      console.log(`📦 [Workspace Canvas] Model Loaded: ${meshList.length} meshes, ${materialNames.length} materials detected.`);
+
+      const materialNames = Array.from(allMaterialSet);
+      console.log(`📦 [Workspace Canvas] Model Loaded: ${meshList.length} meshes, ${materialNames.length} total materials detected.`);
       onModelLoaded(materialNames, meshList);
     }
   }, [scene, materials, onModelLoaded]);
