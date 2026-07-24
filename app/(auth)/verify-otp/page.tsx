@@ -16,7 +16,7 @@ function VerifyOTPForm() {
   const searchParams = useSearchParams();
   const { showToast } = useAlert();
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   // Memoize search query tracking context parameters
   const isRecoveryFlow = useMemo(() => {

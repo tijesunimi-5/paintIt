@@ -45,11 +45,14 @@ function WorkspaceContent() {
   // System UI Panels States
   const [activeTab, setActiveTab] = useState<"paint" | "texture" | "lighting">("paint");
   const [activeSurface, setActiveSurface] = useState<string>("wallFront");
-  const [activeTextures, setActiveTextures] = useState<Record<TextureCategory, string>>({
+  const [activeTextures, setActiveTextures] = useState<Record<string, string>>({
     FLOOR: "original",
     WARDROBE: "original",
     DOOR: "original",
   });
+  const [detectedMeshes, setDetectedMeshes] = useState<string[]>([]);
+  const [availableMaterials, setAvailableMaterials] = useState<string[]>([]);
+  const [materialSwaps, setMaterialSwaps] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Custom Save Modal States
@@ -91,9 +94,14 @@ function WorkspaceContent() {
 
   const [customColors, setCustomColors] = useState<CustomColor[]>([]);
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const initialRoomColorsRef = useRef(roomColors);
   const initialCameraConfigRef = useRef(cameraConfig);
+
+  const handleModelLoaded = (meshes: string[], materials: string[]) => {
+    setDetectedMeshes(meshes);
+    setAvailableMaterials(materials);
+  };
 
   // Deep Hydration Loop
   useEffect(() => {
@@ -108,6 +116,7 @@ function WorkspaceContent() {
         let loadedTitle = "Custom Design Concept";
         let resolvedModelPath = "/models/selfcon.glb";
         let resolvedNightMode = false;
+        let activeSwaps = {};
 
         // 🚀 FETCH 1: Get complete template configurations
         const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${resolvedTemplateId}`).catch(() => null);
@@ -121,7 +130,11 @@ function WorkspaceContent() {
             resolvedModelPath = templateData.model_url || resolvedModelPath;
 
             if (templateData.default_room_data) {
-              activeColors = templateData.default_room_data;
+              activeColors = { ...templateData.default_room_data };
+              if (activeColors._materialSwaps) {
+                activeSwaps = { ...(activeColors._materialSwaps as any) };
+                delete activeColors._materialSwaps;
+              }
             }
 
             if (templateData.lighting_settings) {
@@ -153,7 +166,13 @@ function WorkspaceContent() {
             console.log("📥 Deep Hydrated Saved Layout:", visData);
             if (visData.visualization) {
               loadedTitle = visData.visualization.name;
-              activeColors = visData.visualization.room_data || visData.visualization.roomData || activeColors;
+              
+              const rawColors = visData.visualization.room_data || visData.visualization.roomData || activeColors;
+              activeColors = { ...rawColors };
+              if (activeColors._materialSwaps) {
+                activeSwaps = { ...(activeColors._materialSwaps as any) };
+                delete activeColors._materialSwaps;
+              }
 
               const savedLights = visData.visualization.light_data || visData.visualization.lightData;
               if (savedLights && savedLights.length > 0) {
@@ -179,6 +198,7 @@ function WorkspaceContent() {
 
         if (isMounted) {
           setRoomColors(activeColors);
+          setMaterialSwaps(activeSwaps);
           setBulbs(activeLights);
           setCameraConfig(activeCamera);
           setTemplateId(resolvedTemplateId);
@@ -284,11 +304,16 @@ function WorkspaceContent() {
     setIsSaving(true);
 
     try {
+      const saveRoomColors = {
+        ...roomColors,
+        _materialSwaps: materialSwaps
+      };
+
       const saveBody = {
         id: urlDesignId,
         name: saveName.trim(),
-        roomData: roomColors,
-        room_data: roomColors,
+        roomData: saveRoomColors,
+        room_data: saveRoomColors,
         lightData: bulbs,
         light_data: bulbs,
         cameraData: cameraConfig,
@@ -372,6 +397,8 @@ function WorkspaceContent() {
             cameraConfig={cameraConfig}
             roomTextures={{}}
             activeTextures={activeTextures}
+            materialSwaps={materialSwaps}
+            onModelLoaded={handleModelLoaded}
             isNightMode={isNightMode}
           />
         </Canvas>
@@ -446,6 +473,8 @@ function WorkspaceContent() {
               setRoomColors={setRoomColors}
               customColors={customColors}
               setCustomColors={setCustomColors}
+              detectedMeshes={detectedMeshes}
+              onSurfaceSelect={setActiveSurface}
             />
           )}
           {activeTab === "texture" && (
@@ -454,6 +483,18 @@ function WorkspaceContent() {
               onTextureSelect={(category, textureId) =>
                 setActiveTextures((prev) => ({ ...prev, [category]: textureId }))
               }
+              activeSurface={activeSurface}
+              availableMaterials={availableMaterials}
+              materialSwaps={materialSwaps}
+              onMaterialSwap={(meshName, materialName) => {
+                setMaterialSwaps((prev) => ({ ...prev, [meshName]: materialName }));
+                // Clear any procedural texture for this surface to let the native material show
+                setActiveTextures((prev) => {
+                  const copy = { ...prev };
+                  delete copy[meshName];
+                  return copy;
+                });
+              }}
             />
           )}
           {activeTab === "lighting" && (

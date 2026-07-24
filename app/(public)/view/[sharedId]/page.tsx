@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Canvas, ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Environment, Sky } from "@react-three/drei";
+import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import Image from "next/image";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
@@ -14,7 +14,7 @@ import { useAlert } from "@/context/AlertContext";
 import PaintPicker, { CustomColor } from "@/components/canvas/ClientPaintPicker";
 import LightControls, { BulbState } from "@/components/canvas/LightControls";
 import ClientTexturePicker from "@/components/canvas/ClientTexturePicker";
-import { TEXTURE_PRESETS, TextureCategory } from "@/utils/generateFloorTextures";
+import { TEXTURE_PRESETS, TextureCategory, getMeshCategory } from "@/utils/generateFloorTextures";
 import { DBRawLight } from "../../workspace/page";
 import { PAINT_FINISH_PRESETS, PaintFinishId } from "@/config/paintFinishes";
 import { generateWallNormalMap } from "@/utils/generateWallNormalMaps";
@@ -97,15 +97,15 @@ function ClientInteractiveCanvas({
   cameraConfig: DBCameraConfig;
   isNightMode: boolean;
   activeFinish?: PaintFinishId;
-  activeTextures?: Record<TextureCategory, string>;
+  activeTextures?: Record<string, string>;
 }) {
-  const { scene } = useGLTF(modelUrl);
+  const { scene, materials } = useGLTF(modelUrl) as any;
   const clonedScene = React.useMemo(() => {
     const clone = scene.clone();
     const hasInnerWalls = !!clone.getObjectByName('wallLeft');
     if (hasInnerWalls) {
       console.log("🛠️ [View Canvas] Preparing scene: interior walls detected. Hiding structural exterior walls.");
-      clone.traverse((node) => {
+      clone.traverse((node: THREE.Object3D) => {
         if (node instanceof THREE.Mesh) {
           if (WALL_MAPPING[node.name]) {
             node.visible = false;
@@ -135,6 +135,8 @@ function ClientInteractiveCanvas({
   useEffect(() => {
     if (!clonedScene) return;
 
+    const materialSwaps = (roomColors?._materialSwaps as unknown as Record<string, string>) || {};
+
     clonedScene.traverse((node: THREE.Object3D) => {
       if (node instanceof THREE.Mesh) {
         const meshName = node.name;
@@ -144,13 +146,16 @@ function ClientInteractiveCanvas({
         node.receiveShadow = true;
 
         const targetKey = WALL_MAPPING[meshName] || meshName;
-        const isWallSurface = targetKey.startsWith('wall') || targetKey === 'ceiling';
-        const isFloor = targetKey === 'floor' || meshName === 'Cube.011';
-        const isWardrobe = targetKey === 'wardrobe' || meshName === 'Cube.008';
-        const isDoor = targetKey === 'door' || meshName === 'Mesh.091';
+        const category = getMeshCategory(meshName);
+        
+        // 1. Resolve dynamic texture mapping
+        const activeTextureId = activeTextures?.[meshName] || activeTextures?.[category];
+        
+        // 2. Resolve material swap mapping
+        const swapMaterialName = materialSwaps?.[meshName];
 
-        if (isFloor && activeTextures?.FLOOR && activeTextures.FLOOR !== "original") {
-          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.FLOOR);
+        if (activeTextureId && activeTextureId !== "original") {
+          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextureId);
           if (preset) {
             const mat = new THREE.MeshStandardMaterial({
               map: preset.generateTexture(),
@@ -162,59 +167,54 @@ function ClientInteractiveCanvas({
             node.material = mat;
             node.material.needsUpdate = true;
           }
-        } else if (isWardrobe && activeTextures?.WARDROBE && activeTextures.WARDROBE !== "original") {
-          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.WARDROBE);
-          if (preset) {
-            node.material = new THREE.MeshStandardMaterial({
-              map: preset.generateTexture(),
-              roughness: preset.roughness,
-              metalness: preset.metalness,
-              side: THREE.DoubleSide,
-            });
-            node.material.needsUpdate = true;
-          }
-        } else if (isDoor && activeTextures?.DOOR && activeTextures.DOOR !== "original") {
-          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.DOOR);
-          if (preset) {
-            node.material = new THREE.MeshStandardMaterial({
-              map: preset.generateTexture(),
-              roughness: preset.roughness,
-              metalness: preset.metalness,
-              side: THREE.DoubleSide,
-            });
-            node.material.needsUpdate = true;
-          }
-        } else if (isWallSurface && roomColors[targetKey]) {
-          if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
-            const oldMat = node.material;
-            node.material = new THREE.MeshPhysicalMaterial({
-              color: oldMat.color,
-              map: oldMat.map || null,
-              side: THREE.DoubleSide,
-            });
-          }
-
-          const mat = node.material as THREE.MeshPhysicalMaterial;
-          mat.side = THREE.DoubleSide;
-
-          mat.roughness = roughness;
-          mat.metalness = metalness;
-          mat.clearcoat = clearcoat || 0;
-          mat.clearcoatRoughness = clearcoatRoughness || 0.1;
-          mat.envMapIntensity = envMapIntensity;
-
-          mat.bumpMap = wallNormalMap;
-          mat.bumpScale = bumpScale;
-
-          // Enable polygon offset to prevent overlapping mesh z-fighting
-          mat.polygonOffset = true;
-          mat.polygonOffsetFactor = -1;
-          mat.polygonOffsetUnits = -1;
-
-          mat.color.set(roomColors[targetKey]);
-          mat.needsUpdate = true;
-        } else if (node.material instanceof THREE.MeshStandardMaterial) {
+        } else if (swapMaterialName && materials[swapMaterialName]) {
+          // Dynamic native material swapping
+          node.material = materials[swapMaterialName].clone();
+          node.material.side = THREE.DoubleSide;
           node.material.needsUpdate = true;
+        } else {
+          // Paint colors
+          const activeColor = roomColors[meshName] || roomColors[targetKey] || (category === 'WALL' ? '#F2EFE9' : null);
+
+          if (activeColor) {
+            // Upgrade to MeshPhysicalMaterial for walls to support finish presets
+            if (category === 'WALL' || meshName.startsWith('wall') || targetKey === 'ceiling') {
+              if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
+                const oldMat = node.material;
+                node.material = new THREE.MeshPhysicalMaterial({
+                  color: oldMat ? oldMat.color : new THREE.Color('#F2EFE9'),
+                  map: (oldMat && oldMat.map) || null,
+                  side: THREE.DoubleSide,
+                });
+              }
+
+              const mat = node.material as THREE.MeshPhysicalMaterial;
+              mat.color.set(activeColor);
+              mat.side = THREE.DoubleSide;
+
+              mat.roughness = roughness;
+              mat.metalness = metalness;
+              mat.clearcoat = clearcoat || 0;
+              mat.clearcoatRoughness = clearcoatRoughness || 0.1;
+              mat.envMapIntensity = envMapIntensity;
+
+              if (meshName.startsWith('wall') || category === 'WALL') {
+                mat.bumpMap = wallNormalMap;
+                mat.bumpScale = bumpScale;
+              }
+
+              mat.polygonOffset = true;
+              mat.polygonOffsetFactor = -1;
+              mat.polygonOffsetUnits = -1;
+              mat.needsUpdate = true;
+            } else if (node.material instanceof THREE.MeshStandardMaterial) {
+              // Paint furniture/props using StandardMaterial
+              node.material = node.material.clone();
+              node.material.side = THREE.DoubleSide;
+              node.material.color.set(activeColor);
+              node.material.needsUpdate = true;
+            }
+          }
         }
       }
     });
@@ -230,6 +230,7 @@ function ClientInteractiveCanvas({
     envMapIntensity,
     wallNormalMap,
     activeTextures,
+    materials
   ]);
   
 
@@ -348,7 +349,7 @@ export default function PublicProfileAndConceptPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [importing, setImporting] = useState<boolean>(false);
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const startDrag = () => {
     isDragging.current = true;
@@ -626,10 +627,12 @@ export default function PublicProfileAndConceptPage() {
       if (savedDraft) {
         try {
           const parsed = JSON.parse(savedDraft);
-          if (parsed.roomColors) setRoomColors(parsed.roomColors);
-          if (parsed.activeFinish) setActiveFinish(parsed.activeFinish);
-          if (parsed.activeTextures) setActiveTextures(parsed.activeTextures);
-          if (parsed.bulbs) setBulbs(parsed.bulbs);
+          setTimeout(() => {
+            if (parsed.roomColors) setRoomColors(parsed.roomColors);
+            if (parsed.activeFinish) setActiveFinish(parsed.activeFinish);
+            if (parsed.activeTextures) setActiveTextures(parsed.activeTextures);
+            if (parsed.bulbs) setBulbs(parsed.bulbs);
+          }, 0);
           console.log("🔄 Restored design draft config from guest session.");
           
           // Clear draft instantly on restore so it doesn't loop overwrite future fresh changes
@@ -810,7 +813,7 @@ export default function PublicProfileAndConceptPage() {
         {/* Navigation HUD Header */}
         <div className="fixed top-14 left-0 right-0 bg-neutral-950/90 border-b border-neutral-900 px-4 py-2.5 z-50 flex items-center justify-between backdrop-blur-md shadow-xl transition-all">
           <div>
-            <h1 className="text-xs font-black uppercase tracking-wider text-neutral-100 truncate max-w-[180px] sm:max-w-xs">
+            <h1 className="text-xs font-black uppercase tracking-wider text-neutral-100 truncate max-w-45 sm:max-w-xs">
               {sharedConcept.design_name}
             </h1>
             <p className="text-[9px] text-neutral-500 uppercase tracking-widest mt-0.5 font-mono">

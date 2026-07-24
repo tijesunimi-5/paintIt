@@ -47,7 +47,7 @@ interface AnalyticsData {
   interactions: InteractionLog[];
 }
 
-const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function AdminAnalyticsDashboard() {
   const { accessToken } = useAuth();
@@ -76,7 +76,7 @@ export default function AdminAnalyticsDashboard() {
           const reviewsJson = await reviewsRes.json();
           setReviews(reviewsJson.reviews || []);
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
         showToast({ message: "⚠️ Could not sync admin metrics directory.", severity: "error" });
       } finally {
@@ -162,7 +162,7 @@ export default function AdminAnalyticsDashboard() {
         {/* Visitor Sessions Log */}
         <div className="p-6 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-xl flex flex-col justify-between">
           <h3 className="text-xs font-black uppercase text-neutral-400 tracking-wider mb-4">⏱️ Active Session Heartbeats</h3>
-          <div className="overflow-x-auto max-h-[350px]">
+          <div className="overflow-x-auto max-h-87.5">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-neutral-800 text-[9px] uppercase tracking-wider text-neutral-500">
@@ -175,7 +175,7 @@ export default function AdminAnalyticsDashboard() {
               <tbody className="divide-y divide-neutral-800/40">
                 {sessions.map((s) => (
                   <tr key={s.id} className="text-[10px] font-mono text-neutral-350">
-                    <td className="py-2.5 max-w-[150px] truncate">
+                    <td className="py-2.5 max-w-37.5 truncate">
                       {s.email ? (
                         <span className="text-cyan-400 font-bold">{s.email}</span>
                       ) : (
@@ -195,7 +195,7 @@ export default function AdminAnalyticsDashboard() {
         {/* User Interactions Log */}
         <div className="p-6 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-xl flex flex-col justify-between">
           <h3 className="text-xs font-black uppercase text-neutral-400 tracking-wider mb-4">⚡ Client Interaction Stream</h3>
-          <div className="overflow-x-auto max-h-[350px]">
+          <div className="overflow-x-auto max-h-87.5">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-neutral-800 text-[9px] uppercase tracking-wider text-neutral-500">

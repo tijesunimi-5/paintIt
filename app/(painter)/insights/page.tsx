@@ -16,11 +16,12 @@ export default function PainterInsightsAnalyticsPage() {
   const { accessToken } = useAuth();
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
     const fetchPerformanceMetrics = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/analytics/overview', {
+        const response = await fetch(`${BACKEND_API_URL}/api/analytics/overview`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${accessToken}`,

@@ -25,7 +25,7 @@ export default function PainterAccountSettingsPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [successState, setSuccessState] = useState(false);
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   // Bootstrap active profile values on component lifecycle initialization
   useEffect(() => {

@@ -14,7 +14,7 @@ function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const { showToast } = useAlert();
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   // Derived state variables directly from the render cycle
   const emailContext = searchParams?.get("email") || null;

@@ -42,7 +42,7 @@ export default function Painter3DStudioDashboardHub() {
   const [deleteOpen, setDeleteOpen] = useState<boolean>(false);
   const [designTargetForDelete, setDesignTargetForDelete] = useState<SavedVisualization | null>(null);
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
     let isMounted = true;

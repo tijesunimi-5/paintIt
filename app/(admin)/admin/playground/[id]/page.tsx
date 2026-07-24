@@ -27,7 +27,7 @@ type MasterTemplateCatalogItem = {
   model_url?: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function DedicatedPlayground() {
   const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -37,6 +37,11 @@ export default function DedicatedPlayground() {
 
   const [activeSurface, setActiveSurface] = useState<string>('wallFront');
   const [activeFinish, setActiveFinish] = useState<PaintFinishId>('EMULSION');
+  const [activeTextures, setActiveTextures] = useState<Record<string, string>>({
+    FLOOR: 'original',
+    WARDROBE: 'original',
+    DOOR: 'original'
+  });
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
   const [gizmoMode, setGizmoMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
   const [cleanViewActive, setCleanViewActive] = useState<boolean>(false);
@@ -47,6 +52,8 @@ export default function DedicatedPlayground() {
   const [roomColors, setRoomColors] = useState<Record<string, string>>({
     floor: '#f2f0ea', ceiling: '#ffffff', wallFront: '#F2EFE9', wallBack: '#F2EFE9', wallLeft: '#9BA498', wallRight: '#C4B199', toilet: '#ffffff'
   });
+  const [materialSwaps, setMaterialSwaps] = useState<Record<string, string>>({});
+  const [availableMaterials, setAvailableMaterials] = useState<string[]>([]);
 
   const [hasHydrated, setHasHydrated] = useState<boolean>(false);
   const [isLandscapeOverride, setIsLandscapeOverride] = useState<boolean>(false);
@@ -91,12 +98,24 @@ export default function DedicatedPlayground() {
     localStorage.setItem(`paintit_colors_${dynamicId}`, JSON.stringify(roomColors));
   }, [roomColors, dynamicId, hasHydrated]);
 
+  useEffect(() => {
+    if (!hasHydrated || !dynamicId) return;
+    localStorage.setItem(`paintit_textures_${dynamicId}`, JSON.stringify(activeTextures));
+  }, [activeTextures, dynamicId, hasHydrated]);
+
+  useEffect(() => {
+    if (!hasHydrated || !dynamicId) return;
+    localStorage.setItem(`paintit_material_swaps_${dynamicId}`, JSON.stringify(materialSwaps));
+  }, [materialSwaps, dynamicId, hasHydrated]);
+
   // Initial environment setup hydration pipeline
   useEffect(() => {
     if (typeof window === 'undefined' || !dynamicId) return;
 
     const savedColors = localStorage.getItem(`paintit_colors_${dynamicId}`);
     const savedLights = localStorage.getItem(`paintit_lights_${dynamicId}`);
+    const savedTextures = localStorage.getItem(`paintit_textures_${dynamicId}`);
+    const savedSwaps = localStorage.getItem(`paintit_material_swaps_${dynamicId}`);
 
     const hydrateStudioEnvironment = async () => {
       setDesignId(dynamicId);
@@ -106,12 +125,23 @@ export default function DedicatedPlayground() {
           const data = await res.json();
           if (data) {
             if (data.title) setDesignTitle(data.title);
+            if (data.model_url) setModelUrl(data.model_url);
 
             // Prioritize local storage recovery layers to protect your session edits over remote assets
             if (savedColors) {
               setRoomColors(JSON.parse(savedColors));
             } else if (data.default_room_data) {
               setRoomColors(data.default_room_data);
+            }
+
+            if (savedTextures) {
+              setActiveTextures(JSON.parse(savedTextures));
+            }
+
+            if (savedSwaps) {
+              setMaterialSwaps(JSON.parse(savedSwaps));
+            } else if (data.default_room_data && data.default_room_data._materialSwaps) {
+              setMaterialSwaps(data.default_room_data._materialSwaps);
             }
 
             if (savedLights) {
@@ -159,12 +189,10 @@ export default function DedicatedPlayground() {
   useEffect(() => {
     let isMounted = true;
     const urlDesignId = searchParams?.get("id") || null;
-    const urlTemplateId = searchParams?.get("template") || "tmpl_living_lux";
-
     const syncStudioContext = async () => {
       try {
         let activeRoomColors = { ...roomColors };
-        let resolvedTemplateId = urlTemplateId;
+        let resolvedTemplateId = dynamicId;
         let dbDesignTitle = "";
 
         // 1. If we are editing an already saved visualization ID:
@@ -193,7 +221,7 @@ export default function DedicatedPlayground() {
                 data.visualization.masterDesignId ||
                 data.visualization.master_design_id ||
                 data.visualization.parent_template_id ||
-                urlTemplateId;
+                dynamicId;
             }
           }
         }
@@ -253,7 +281,7 @@ export default function DedicatedPlayground() {
     const schemaPayload = {
       id: designId,
       title: designTitle,
-      model_url: "/models/selfcon.glb",
+      model_url: modelUrl,
       camera_settings: {
         position: currentCameraPosition,
         target: currentCameraTarget,
@@ -262,7 +290,10 @@ export default function DedicatedPlayground() {
         floorLimitAngle: cameraConfig.floorLimitAngle
       },
       lighting_settings: sceneLights,
-      default_room_data: roomColors,
+      default_room_data: {
+        ...roomColors,
+        _materialSwaps: materialSwaps
+      },
       global_environment: globalEnvironment
     };
 
@@ -378,15 +409,27 @@ export default function DedicatedPlayground() {
           </button>
 
           {isAdmin ? (
-            <input
-              type="text"
-              value={designTitle}
-              onChange={(e) => setDesignTitle(e.target.value)}
-              className="bg-neutral-950 text-neutral-200 border border-neutral-800 rounded-lg px-2 py-1 text-[11px] font-bold tracking-wide w-full max-w-45 focus:outline-hidden focus:border-cyan-500"
-              placeholder="Design Title..."
-            />
+            <div className="flex gap-2 w-full max-w-lg">
+              <input
+                type="text"
+                value={designTitle}
+                onChange={(e) => setDesignTitle(e.target.value)}
+                className="bg-neutral-950 text-neutral-200 border border-neutral-800 rounded-lg px-2 py-1 text-[11px] font-bold tracking-wide w-1/2 focus:outline-none focus:border-cyan-500"
+                placeholder="Design Title..."
+              />
+              <input
+                type="text"
+                value={modelUrl}
+                onChange={(e) => setModelUrl(e.target.value)}
+                className="bg-neutral-950 text-neutral-200 border border-neutral-800 rounded-lg px-2 py-1 text-[11px] font-mono tracking-wide w-1/2 focus:outline-none focus:border-cyan-500"
+                placeholder="Model URL (/models/...)"
+              />
+            </div>
           ) : (
-            <span className="text-[11px] font-black text-neutral-200 tracking-wide truncate max-w-45">{designTitle}</span>
+            <div className="flex flex-col max-w-45 truncate">
+              <span className="text-[11px] font-black text-neutral-200 tracking-wide truncate">{designTitle}</span>
+              <span className="text-[9px] font-mono text-neutral-500 truncate">{modelUrl}</span>
+            </div>
           )}
 
           <button
@@ -444,6 +487,9 @@ export default function DedicatedPlayground() {
               modelUrl={modelUrl}
               surfaceStates={roomColors}
               activeFinish={activeFinish}
+              activeTextures={activeTextures}
+              materialSwaps={materialSwaps}
+              onModelLoaded={(materials) => setAvailableMaterials(materials)}
               onTargetSelect={(meshName: string) => {
                 if (!cleanViewActive && isAdmin) setActiveSurface(meshName);
               }}
@@ -483,6 +529,11 @@ export default function DedicatedPlayground() {
           onColorChange={(color: string) => setRoomColors((prev) => ({ ...prev, [activeSurface]: color }))}
           currentFinish={activeFinish}
           onFinishChange={setActiveFinish}
+          activeTextures={activeTextures}
+          onTextureSelect={(category, textureId) => setActiveTextures((prev) => ({ ...prev, [category]: textureId }))}
+          availableMaterials={availableMaterials}
+          materialSwaps={materialSwaps}
+          onMaterialSwap={(meshName, materialName) => setMaterialSwaps((prev) => ({ ...prev, [meshName]: materialName }))}
           onAddLight={addNewLight}
           onSelectLight={(id) => {
             // 🔒 FIX: Temporarily intercept panel events to block async trace collisions

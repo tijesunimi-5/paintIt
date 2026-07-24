@@ -9,6 +9,8 @@ import { DynamicLightInstance } from '@/types/index';
 import { generateWallNormalMap } from '@/utils/generateWallNormalMaps';
 import { PAINT_FINISH_PRESETS, PaintFinishId } from '@/config/paintFinishes';
 
+import { TEXTURE_PRESETS, getMeshCategory } from '@/utils/generateFloorTextures';
+
 interface GizmoProps {
   activeLight: DynamicLightInstance;
   mode: 'translate' | 'rotate' | 'scale';
@@ -90,6 +92,9 @@ interface BlenderMeshProps {
   modelUrl: string;
   surfaceStates: Record<string, string>;
   activeFinish?: PaintFinishId;
+  activeTextures?: Record<string, string>;
+  materialSwaps?: Record<string, string>;
+  onModelLoaded?: (materials: string[], meshes: { name: string; originalMaterial: string }[]) => void;
   onTargetSelect: (meshName: string) => void;
 }
 
@@ -110,9 +115,12 @@ export function StudioBlenderModelMesh({
   modelUrl,
   surfaceStates,
   activeFinish = 'EMULSION',
+  activeTextures,
+  materialSwaps,
+  onModelLoaded,
   onTargetSelect
 }: BlenderMeshProps) {
-  const { scene } = useGLTF(modelUrl) as unknown as GLTFResult;
+  const { scene, materials } = useGLTF(modelUrl) as unknown as GLTFResult;
   const clonedScene = useMemo(() => {
     const clone = scene.clone();
     const hasInnerWalls = !!clone.getObjectByName('wallLeft');
@@ -132,9 +140,27 @@ export function StudioBlenderModelMesh({
   const wallNormalMap = useMemo(() => generateWallNormalMap(512, 512), []);
 
   useEffect(() => {
+    if (scene && materials && onModelLoaded) {
+      const materialNames = Object.keys(materials);
+      const meshList: { name: string; originalMaterial: string }[] = [];
+      scene.traverse((node) => {
+        if (node instanceof THREE.Mesh) {
+          const matName = node.material && (node.material as THREE.Material).name;
+          meshList.push({
+            name: node.name,
+            originalMaterial: matName || 'default'
+          });
+        }
+      });
+      onModelLoaded(materialNames, meshList);
+    }
+  }, [scene, materials, onModelLoaded]);
+
+  // ⚡ OPTIMIZED MESH TRAVERSAL: Update materials for walls, textures, & material swaps dynamically
+  useEffect(() => {
     if (!clonedScene) return;
 
-    console.log("🎨 [Studio Canvas] Traversing Scene for Paint Updates. surfaceStates:", surfaceStates);
+    console.log("🎨 [Studio Canvas] Traversing Scene for Paint & Texture Updates. surfaceStates:", surfaceStates);
 
     const finishPreset = PAINT_FINISH_PRESETS[activeFinish] || PAINT_FINISH_PRESETS.EMULSION;
     const { roughness, metalness, clearcoat, clearcoatRoughness, bumpScale, envMapIntensity } = finishPreset.materialProps;
@@ -148,58 +174,79 @@ export function StudioBlenderModelMesh({
         node.receiveShadow = true;
 
         const targetKey = WALL_MAPPING[meshName] || meshName;
-        const isWallSurface = targetKey.startsWith('wall');
+        const category = getMeshCategory(meshName);
+        
+        // 1. Resolve dynamic texture mapping
+        const activeTextureId = activeTextures?.[meshName] || activeTextures?.[category];
+        
+        // 2. Resolve material swap mapping
+        const swapMaterialName = materialSwaps?.[meshName];
 
-        if (isWallSurface && surfaceStates[targetKey]) {
-          console.log(`🖌️ [Studio Canvas] Painting ${meshName} (${targetKey}) -> ${surfaceStates[targetKey]}`);
-          // Upgrade to MeshPhysicalMaterial for clearcoat & sheen rendering
-          if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
-            const oldMat = node.material;
-            node.material = new THREE.MeshPhysicalMaterial({
-              color: oldMat.color,
-              map: oldMat.map || null,
+        if (activeTextureId && activeTextureId !== "original") {
+          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextureId);
+          if (preset) {
+            const mat = new THREE.MeshStandardMaterial({
+              map: preset.generateTexture(),
+              roughness: preset.roughness,
+              metalness: preset.metalness,
               side: THREE.DoubleSide,
             });
+            if (preset.clearcoat) (mat as unknown as { clearcoat: number }).clearcoat = preset.clearcoat;
+            node.material = mat;
+            node.material.needsUpdate = true;
           }
-
-          const mat = node.material as THREE.MeshPhysicalMaterial;
-          mat.color.set(surfaceStates[targetKey]);
-          mat.side = THREE.DoubleSide;
-
-          // Apply finish sheen properties
-          mat.roughness = roughness;
-          mat.metalness = metalness;
-          mat.clearcoat = clearcoat || 0;
-          mat.clearcoatRoughness = clearcoatRoughness || 0.1;
-          mat.envMapIntensity = envMapIntensity;
-
-          // Apply drywall plaster bump map
-          mat.bumpMap = wallNormalMap;
-          mat.bumpScale = bumpScale;
-
-          // Enable polygon offset to prevent overlapping mesh z-fighting
-          mat.polygonOffset = true;
-          mat.polygonOffsetFactor = -1;
-          mat.polygonOffsetUnits = -1;
-
-          mat.needsUpdate = true;
-        } else if (node.material instanceof THREE.MeshStandardMaterial) {
-          // Clone standard materials (floor/ceiling/furniture) to prevent bleeding
-          node.material = node.material.clone();
-          if (surfaceStates[targetKey]) node.material.color.set(surfaceStates[targetKey]);
-          
-          if (targetKey === 'floor') {
-            if (!surfaceStates[targetKey]) node.material.color.set('#f2f0ea');
-            node.material.roughness = 0.12;
-          } else if (targetKey === 'ceiling') {
-            if (!surfaceStates[targetKey]) node.material.color.set('#ffffff');
-            node.material.roughness = 0.95;
-          }
+        } else if (swapMaterialName && materials[swapMaterialName]) {
+          // Dynamic native material swapping
+          node.material = materials[swapMaterialName].clone();
+          node.material.side = THREE.DoubleSide;
           node.material.needsUpdate = true;
+        } else {
+          // Paint colors
+          const activeColor = surfaceStates[meshName] || surfaceStates[targetKey] || (category === 'WALL' ? '#F2EFE9' : null);
+
+          if (activeColor) {
+            // Upgrade to MeshPhysicalMaterial for walls to support finish presets
+            if (category === 'WALL' || meshName.startsWith('wall') || targetKey === 'ceiling') {
+              if (!(node.material instanceof THREE.MeshPhysicalMaterial)) {
+                const oldMat = node.material;
+                node.material = new THREE.MeshPhysicalMaterial({
+                  color: oldMat ? oldMat.color : new THREE.Color('#F2EFE9'),
+                  map: (oldMat && oldMat.map) || null,
+                  side: THREE.DoubleSide,
+                });
+              }
+
+              const mat = node.material as THREE.MeshPhysicalMaterial;
+              mat.color.set(activeColor);
+              mat.side = THREE.DoubleSide;
+
+              mat.roughness = roughness;
+              mat.metalness = metalness;
+              mat.clearcoat = clearcoat || 0;
+              mat.clearcoatRoughness = clearcoatRoughness || 0.1;
+              mat.envMapIntensity = envMapIntensity;
+
+              if (meshName.startsWith('wall') || category === 'WALL') {
+                mat.bumpMap = wallNormalMap;
+                mat.bumpScale = bumpScale;
+              }
+
+              mat.polygonOffset = true;
+              mat.polygonOffsetFactor = -1;
+              mat.polygonOffsetUnits = -1;
+              mat.needsUpdate = true;
+            } else if (node.material instanceof THREE.MeshStandardMaterial) {
+              // Paint furniture/props using StandardMaterial
+              node.material = node.material.clone();
+              node.material.side = THREE.DoubleSide;
+              node.material.color.set(activeColor);
+              node.material.needsUpdate = true;
+            }
+          }
         }
       }
     });
-  }, [clonedScene, surfaceStates, activeFinish, wallNormalMap]);
+  }, [clonedScene, surfaceStates, activeFinish, activeTextures, materialSwaps, wallNormalMap, materials]);
 
   return (
     <primitive

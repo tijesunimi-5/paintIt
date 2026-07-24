@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useAlert } from "@/context/AlertContext";
 
-const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function AdminCampaignsComposer() {
   const { accessToken } = useAuth();
@@ -144,7 +144,7 @@ export default function AdminCampaignsComposer() {
               <li>Use the dropdown target selector to focus on specific niches.</li>
               <li>Keep subject lines catchy to increase open rates (recommend 40-60 characters).</li>
               <li>PaintIT automatically wraps your text in a verified luxury dark email template for consistent aesthetics.</li>
-              <li>Avoid spam triggers: limit exclamation marks and words like "FREE CASH".</li>
+              <li>Avoid spam triggers: limit exclamation marks and words like &quot;FREE CASH&quot;.</li>
             </ul>
           </div>
 
@@ -163,7 +163,7 @@ export default function AdminCampaignsComposer() {
                 </div>
               </div>
               <p className="text-[10px] text-neutral-500 leading-relaxed font-medium">
-                Email campaign completed delivery. Performance reports are tracked inside Brevo's outbound transactional portal.
+                Email campaign completed delivery. Performance reports are tracked inside Brevo&apos;s outbound transactional portal.
               </p>
             </div>
           )}

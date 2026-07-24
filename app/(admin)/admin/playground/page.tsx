@@ -13,7 +13,7 @@ interface DesignTemplate {
   category?: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function AdminPlaygroundCatalog() {
   const [catalog, setCatalog] = useState<DesignTemplate[]>([]);
@@ -21,6 +21,14 @@ export default function AdminPlaygroundCatalog() {
   const router = useRouter();
   const { showToast } = useAlert();
   const { accessToken } = useAuth();
+
+  // Modal State Variables
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('selfcon.glb');
+  const [newTitle, setNewTitle] = useState<string>('Cozy Modern Living Room');
+  const [newCategory, setNewCategory] = useState<string>('INTERIOR');
+  const [creating, setCreating] = useState<boolean>(false);
 
   // Load all current 3D template rows from backend pg table
   useEffect(() => {
@@ -40,19 +48,48 @@ export default function AdminPlaygroundCatalog() {
     fetchCatalog();
   }, [showToast]);
 
-  // Create a brand new design environment setup record entry dynamically
-  const handleAddNewTemplate = async () => {
+  // Open creation modal & fetch available GLB model filenames
+  const handleOpenCreateModal = async () => {
     const token = accessToken || localStorage.getItem('paintit_access_token') || '';
     if (!token) {
       showToast({ message: '⚠️ Access Denied: Authenticate session first.', severity: 'error' });
       return;
     }
 
+    try {
+      const res = await fetch('/api/models');
+      if (res.ok) {
+        const data = await res.json();
+        const modelsList = data.models || [];
+        setAvailableModels(modelsList);
+        if (modelsList.length > 0) {
+          const hasLivingRoom = modelsList.includes('livingroom.glb');
+          setSelectedModel(hasLivingRoom ? 'livingroom.glb' : modelsList[0]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed fetching models:", err);
+    }
+    setModalOpen(true);
+  };
+
+  // Submit model details and create new playground design instance
+  const handleCreateTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) {
+      showToast({ message: 'Please enter a design title.', severity: 'error' });
+      return;
+    }
+
+    const token = accessToken || localStorage.getItem('paintit_access_token') || '';
+    setCreating(true);
+
     const newId = crypto.randomUUID();
     const payload = {
       id: newId,
-      title: 'New Custom Workspace Variant',
-      model_url: '/models/selfcon.glb', // Baseline asset signature matching default project configurations
+      title: newTitle.trim(),
+      model_url: `/models/${selectedModel}`,
+      category: newCategory,
       camera_settings: { position: [0, 1.4, 2.2], target: [0, 1.5, 0], maxZoomDistance: 0.55, ceilingLimitAngle: 0, floorLimitAngle: 1.85 },
       lighting_settings: [],
       default_room_data: { floor: '#f2f0ea', ceiling: '#ffffff', wallFront: '#F2EFE9', wallBack: '#F2EFE9' },
@@ -71,13 +108,16 @@ export default function AdminPlaygroundCatalog() {
 
       if (res.ok) {
         showToast({ message: '✨ Fresh 3D studio frame initialized!', severity: 'success' });
-        router.push(`/admin/playground/${newId}`); // Boot straight into editor view
+        setModalOpen(false);
+        router.push(`/admin/playground/${newId}`); // Redirect straight to editor view
       } else {
         showToast({ message: '❌ Server refused layout initialization setup.', severity: 'error' });
       }
     } catch (err) {
       console.error(err);
       showToast({ message: '💾 Database creation transaction fault network level.', severity: 'error' });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -100,7 +140,7 @@ export default function AdminPlaygroundCatalog() {
             <p className="text-xs text-neutral-400 mt-1 font-medium">Select an architectural mesh blueprint configuration layer to begin live modifications.</p>
           </div>
           <button
-            onClick={handleAddNewTemplate}
+            onClick={handleOpenCreateModal}
             className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-600 active:scale-95 text-neutral-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all"
           >
             ➕ Create New Model Frame
@@ -141,6 +181,89 @@ export default function AdminPlaygroundCatalog() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ➕ CHOOSE MODEL & SET TITLE CREATION MODAL OVERLAY */}
+        {modalOpen && (
+          <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 max-w-md w-full space-y-6 shadow-2xl animate-fade-in">
+              <div>
+                <h3 className="text-base font-black uppercase tracking-wide text-neutral-100">Initialize 3D Studio Frame</h3>
+                <p className="text-[11px] text-neutral-400 mt-1">Pick an available GLB mesh file and assign design labels.</p>
+              </div>
+
+              <form onSubmit={handleCreateTemplate} className="space-y-4">
+                {/* Title Input */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block">Workspace Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors font-sans"
+                    placeholder="e.g. Cozy Modern Living Room"
+                  />
+                </div>
+
+                {/* Model Selection Dropdown */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block">Select 3D Mesh Asset (.glb)</label>
+                  {availableModels.length === 0 ? (
+                    <div className="text-xs text-neutral-500 py-2">
+                      ⚠️ No model files found in public/models/
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors font-sans cursor-pointer"
+                    >
+                      {availableModels.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Category Selection Dropdown */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block">Category</label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors font-sans cursor-pointer"
+                  >
+                    <option value="INTERIOR">Interior Design Room</option>
+                    <option value="EXTERIOR">Exterior Architecture</option>
+                    <option value="FURNITURE">Furniture Showcase</option>
+                  </select>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4 border-t border-neutral-800/60">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="w-1/2 py-2.5 bg-neutral-950 hover:bg-neutral-950/70 border border-neutral-800 rounded-xl text-neutral-400 font-black text-xs uppercase tracking-wider transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creating || availableModels.length === 0}
+                    className="w-1/2 py-2.5 bg-cyan-500 hover:bg-cyan-600 disabled:bg-neutral-800 disabled:text-neutral-600 text-neutral-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5"
+                  >
+                    {creating ? (
+                      <div className="w-3.5 h-3.5 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      "Create Frame"
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>

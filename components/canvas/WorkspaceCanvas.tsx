@@ -8,7 +8,7 @@ import { GLTF, OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { BulbState } from '@/components/canvas/LightControls';
 import { DBCameraConfig } from '@/app/(public)/workspace/page';
 import { generateWallNormalMap } from '@/utils/generateWallNormalMaps';
-import { TEXTURE_PRESETS, TextureCategory } from '@/utils/generateFloorTextures';
+import { TEXTURE_PRESETS, TextureCategory, getMeshCategory } from '@/utils/generateFloorTextures';
 
 interface CanvasProps {
   modelUrl: string;
@@ -18,7 +18,9 @@ interface CanvasProps {
   bulbs: BulbState[];
   cameraConfig: DBCameraConfig;
   roomTextures?: Record<string, string>;
-  activeTextures?: Record<TextureCategory, string>;
+  activeTextures?: Record<string, string>;
+  materialSwaps?: Record<string, string>;
+  onModelLoaded?: (meshes: string[], materials: string[]) => void;
   isNightMode?: boolean;
 }
 
@@ -44,9 +46,11 @@ export default function WorkspaceCanvas({
   cameraConfig,
   roomTextures,
   activeTextures,
+  materialSwaps,
+  onModelLoaded,
   isNightMode = false
 }: CanvasProps) {
-  const { scene } = useGLTF(modelUrl) as unknown as GLTFResult;
+  const { scene, materials } = useGLTF(modelUrl) as unknown as GLTFResult;
   const clonedScene = useMemo(() => {
     const clone = scene.clone();
     const hasInnerWalls = !!clone.getObjectByName('wallLeft');
@@ -63,6 +67,22 @@ export default function WorkspaceCanvas({
     }
     return clone;
   }, [scene]);
+
+  // Extract all meshes and materials to notify parent component
+  useEffect(() => {
+    if (scene && materials && onModelLoaded) {
+      const materialNames = Object.keys(materials);
+      const meshNames: string[] = [];
+      scene.traverse((node) => {
+        if (node instanceof THREE.Mesh) {
+          meshNames.push(node.name);
+        }
+      });
+      console.log(`📦 [Workspace Canvas] Model Loaded: ${meshNames.length} meshes, ${materialNames.length} materials detected.`);
+      onModelLoaded(meshNames, materialNames);
+    }
+  }, [scene, materials, onModelLoaded]);
+
   const wallNormalMap = useMemo(() => generateWallNormalMap(512, 512), []);
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const initialCamSet = useRef<boolean>(false);
@@ -110,7 +130,7 @@ export default function WorkspaceCanvas({
     controlsRef.current.update();
   });
 
-  // ⚡ OPTIMIZED MESH TRAVERSAL: Update materials for walls & textures for floor/furniture
+  // ⚡ OPTIMIZED MESH TRAVERSAL: Update materials for walls, textures, & material swaps dynamically
   useEffect(() => {
     if (!clonedScene) return;
 
@@ -123,13 +143,16 @@ export default function WorkspaceCanvas({
         node.castShadow = true;
 
         const targetKey = WALL_MAPPING[meshName] || meshName;
-        const isWallSurface = targetKey.startsWith('wall') || targetKey === 'ceiling';
-        const isFloor = targetKey === 'floor' || meshName === 'Cube.011';
-        const isWardrobe = targetKey === 'wardrobe' || meshName === 'Cube.008';
-        const isDoor = targetKey === 'door' || meshName === 'Mesh.091';
+        const category = getMeshCategory(meshName);
+        
+        // 1. Resolve dynamic texture mapping (custom mesh ID specific or category fallback)
+        const activeTextureId = activeTextures?.[meshName] || activeTextures?.[category];
+        
+        // 2. Resolve material swap mapping
+        const swapMaterialName = materialSwaps?.[meshName];
 
-        if (isFloor && activeTextures?.FLOOR && activeTextures.FLOOR !== "original") {
-          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.FLOOR);
+        if (activeTextureId && activeTextureId !== "original") {
+          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextureId);
           if (preset) {
             const mat = new THREE.MeshStandardMaterial({
               map: preset.generateTexture(),
@@ -141,50 +164,36 @@ export default function WorkspaceCanvas({
             node.material = mat;
             node.material.needsUpdate = true;
           }
-        } else if (isWardrobe && activeTextures?.WARDROBE && activeTextures.WARDROBE !== "original") {
-          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.WARDROBE);
-          if (preset) {
-            node.material = new THREE.MeshStandardMaterial({
-              map: preset.generateTexture(),
-              roughness: preset.roughness,
-              metalness: preset.metalness,
-              side: THREE.DoubleSide,
-            });
-            node.material.needsUpdate = true;
-          }
-        } else if (isDoor && activeTextures?.DOOR && activeTextures.DOOR !== "original") {
-          const preset = TEXTURE_PRESETS.find((p) => p.id === activeTextures.DOOR);
-          if (preset) {
-            node.material = new THREE.MeshStandardMaterial({
-              map: preset.generateTexture(),
-              roughness: preset.roughness,
-              metalness: preset.metalness,
-              side: THREE.DoubleSide,
-            });
-            node.material.needsUpdate = true;
-          }
-        } else if (isWallSurface && roomColors[targetKey] && node.material instanceof THREE.MeshStandardMaterial) {
-          // Clone shared materials to prevent cross-surface color bleeding
-          node.material = node.material.clone();
-          node.material.side = THREE.DoubleSide; // Support flipped normals
-          node.material.color.set(roomColors[targetKey]);
-
-          // Apply plaster bumps to walls to simulate paint roller orange-peel texture
-          if (targetKey.startsWith('wall')) {
-            node.material.bumpMap = wallNormalMap;
-            node.material.bumpScale = 0.015;
-            node.material.roughness = 0.85; // Matte finish scatter
-
-            // Enable polygon offset to prevent overlapping mesh z-fighting
-            node.material.polygonOffset = true;
-            node.material.polygonOffsetFactor = -1;
-            node.material.polygonOffsetUnits = -1;
-          }
+        } else if (swapMaterialName && materials[swapMaterialName]) {
+          // Dynamic native material swapping
+          node.material = materials[swapMaterialName].clone();
+          node.material.side = THREE.DoubleSide;
           node.material.needsUpdate = true;
+        } else {
+          // Check paint color for walls or custom painted objects
+          const activeColor = roomColors[meshName] || roomColors[targetKey];
+          const isWallSurface = category === 'WALL';
+
+          if (activeColor && node.material instanceof THREE.MeshStandardMaterial) {
+            node.material = node.material.clone();
+            node.material.side = THREE.DoubleSide;
+            node.material.color.set(activeColor);
+
+            if (isWallSurface || meshName.startsWith('wall')) {
+              node.material.bumpMap = wallNormalMap;
+              node.material.bumpScale = 0.015;
+              node.material.roughness = 0.85;
+
+              node.material.polygonOffset = true;
+              node.material.polygonOffsetFactor = -1;
+              node.material.polygonOffsetUnits = -1;
+            }
+            node.material.needsUpdate = true;
+          }
         }
       }
     });
-  }, [clonedScene, roomColors, wallNormalMap, activeTextures]);
+  }, [clonedScene, roomColors, wallNormalMap, activeTextures, materialSwaps, materials]);
 
   return (
     <>

@@ -13,7 +13,7 @@ export function QuickLeadPopup({ painterId }: QuickLeadPopupProps) {
   const [name, setName] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
     // Check if they already dismissed or signed up during this browser run

@@ -341,3 +341,47 @@ function createSolidGrainTexture(baseHex: string, grainHex: string): THREE.Canva
   texture.repeat.set(2, 2);
   return texture;
 }
+
+/**
+ * Procedural mesh category classifier to automatically identify surfaces in any GLTF model
+ */
+export function getMeshCategory(meshName: string): TextureCategory | "WALL" | "OTHER" {
+  if (!meshName) return "OTHER";
+  const name = meshName.toLowerCase();
+  
+  // Floor and ground classification
+  if (name.includes("floor") || name.includes("ground") || meshName === "Cube.011") {
+    return "FLOOR";
+  }
+  
+  // Cabinetry, wardrobe, wood, cupboards
+  if (
+    name.includes("wardrobe") ||
+    name.includes("cabinet") ||
+    name.includes("cupboard") ||
+    name.includes("closet") ||
+    name.includes("wood") ||
+    meshName === "Cube.008"
+  ) {
+    return "WARDROBE";
+  }
+  
+  // Doors and trim
+  if (name.includes("door") || name.includes("gate") || meshName === "Mesh.091") {
+    return "DOOR";
+  }
+  
+  // Walls and ceilings
+  if (
+    name.includes("wall") ||
+    name.includes("ceiling") ||
+    name.includes("roof") ||
+    name.includes("toilet") ||
+    ["left", "right", "back", "front"].includes(name)
+  ) {
+    return "WALL";
+  }
+  
+  return "OTHER";
+}
+

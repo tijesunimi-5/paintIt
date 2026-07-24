@@ -18,6 +18,8 @@ interface PaintPickerProps {
   setRoomColors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   customColors: CustomColor[];
   setCustomColors: React.Dispatch<React.SetStateAction<CustomColor[]>>;
+  detectedMeshes?: string[];
+  onSurfaceSelect?: (meshName: string) => void;
   isReadOnly?: boolean;
   activeFinish?: PaintFinishId;
   onFinishChange?: (finish: PaintFinishId) => void;
@@ -29,6 +31,8 @@ export default function PaintPicker({
   setRoomColors,
   customColors,
   setCustomColors,
+  detectedMeshes = [],
+  onSurfaceSelect,
   isReadOnly = false,
   activeFinish = "EMULSION",
   onFinishChange
@@ -127,6 +131,24 @@ export default function PaintPicker({
           </span>
         </div>
       </div>
+
+      {/* 🎯 MESH SELECTOR DROPDOWN */}
+      {detectedMeshes.length > 0 && onSurfaceSelect && (
+        <div className="space-y-1">
+          <span className="text-[9px] uppercase font-black tracking-widest text-neutral-500 block">Select 3D Mesh Surface</span>
+          <select
+            value={activeSurface}
+            onChange={(e) => onSurfaceSelect(e.target.value)}
+            className="w-full bg-neutral-900 border border-neutral-800 hover:border-neutral-700 px-3 py-2.5 rounded-xl text-xs text-neutral-200 font-bold focus:outline-none transition-all cursor-pointer font-sans"
+          >
+            {detectedMeshes.map((mesh) => (
+              <option key={mesh} value={mesh}>
+                {formatSurfaceName(mesh)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* 🚀 COMBINED MAIN PAINTS & CUSTOM SWATCHES SLIDER */}
       <div className="space-y-2">

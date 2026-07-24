@@ -16,7 +16,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const { showToast } = useAlert();
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const handleExecuteSignup = async (e: React.FormEvent) => {
     e.preventDefault();

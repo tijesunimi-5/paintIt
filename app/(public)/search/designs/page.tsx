@@ -20,7 +20,7 @@ export default function PublicDesignTemplatesDirectoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   // 🎯 FETCH DYNAMIC CATALOG DIRECTLY FROM BACKEND API
   useEffect(() => {

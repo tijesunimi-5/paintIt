@@ -119,19 +119,3 @@ export const REAL_PAINTS_CATALOG: RealPaint[] = [
   },
 ];
 
-// // Helper helper function to find metadata by hex color code
-// export function findPaintMetadata(
-//   hexCode: string,
-//   customDecks: RealPaint[] = [],
-// ): { name: string; brand: string } {
-//   const normalizedHex = hexCode.toUpperCase().trim();
-
-//   // Search custom painter decks first, then fallback to global commercial decks
-//   const matchedPaint =
-//     customDecks.find((p) => p.code.toUpperCase() === normalizedHex) ||
-//     REAL_PAINTS_CATALOG.find((p) => p.code.toUpperCase() === normalizedHex);
-
-//   return matchedPaint
-//     ? { name: matchedPaint.name, brand: matchedPaint.brand }
-//     : { name: "Custom Color Mix", brand: "Painter Palette" };
-// }

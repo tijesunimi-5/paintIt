@@ -5,6 +5,8 @@ import { DynamicLightInstance } from '@/types/index';
 import { PaintFinishSelector } from '@/components/ui/PaintFinishSelector';
 import { PaintFinishId } from '@/config/paintFinishes';
 
+import ClientTexturePicker from '@/components/canvas/ClientTexturePicker';
+
 const MAX_CEILING_HEIGHT = 15.0;
 
 interface AdminPanelProps {
@@ -31,6 +33,11 @@ interface AdminPanelProps {
   cleanViewActive: boolean;
   onToggleCleanView: () => void;
   isLandscapeLayout: boolean;
+  activeTextures?: Record<string, string>;
+  onTextureSelect?: (category: any, textureId: string) => void;
+  availableMaterials?: string[];
+  materialSwaps?: Record<string, string>;
+  onMaterialSwap?: (meshName: string, materialName: string) => void;
 }
 
 export function FloatingAdminPanel({
@@ -38,7 +45,9 @@ export function FloatingAdminPanel({
   onAddLight, onSelectLight, onDeleteLight, onScalarUpdate, onVectorUpdate,
   currentColor, onColorChange, currentFinish, onFinishChange, onCameraPan, onCameraZoomChange, currentZoomValue,
   isLocked, onToggleLock, onSaveToDatabase, cleanViewActive, onToggleCleanView,
-  isLandscapeLayout
+  isLandscapeLayout,
+  activeTextures, onTextureSelect,
+  availableMaterials, materialSwaps, onMaterialSwap
 }: AdminPanelProps) {
   const [position, setPosition] = useState({ x: 16, y: 80 });
   const [size, setSize] = useState({ width: 340, height: 490 });
@@ -49,6 +58,8 @@ export function FloatingAdminPanel({
   const [isPainterOpen, setIsPainterOpen] = useState<boolean>(true);
   const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false);
   const [isEngineOpen, setIsEngineOpen] = useState<boolean>(true);
+  const [isTextureOpen, setIsTextureOpen] = useState<boolean>(false);
+  const [isGltfConfigOpen, setIsGltfConfigOpen] = useState<boolean>(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.drag-handle')) {
@@ -191,6 +202,54 @@ export function FloatingAdminPanel({
               )}
             </div>
 
+            {/* ACCORDION: TEXTURE & MATERIALS */}
+            <div className={`transition-all rounded-xl border border-neutral-800/80 overflow-hidden ${isTextureOpen ? 'bg-neutral-950' : 'bg-transparent border-none'}`}>
+              <button type="button" onClick={() => setIsTextureOpen(!isTextureOpen)} className={`w-full flex justify-between items-center px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider ${isTextureOpen ? 'bg-neutral-950/90 border-b border-neutral-900/40' : 'bg-neutral-950 rounded-xl border border-neutral-800/60'}`}>
+                <span className="flex items-center gap-1.5">📂 {isTextureOpen ? '▼' : '▶'} Texture & Materials</span>
+              </button>
+              {isTextureOpen && activeTextures && onTextureSelect && (
+                <div className="p-3 space-y-3 bg-neutral-950/30">
+                  <ClientTexturePicker
+                    activeTextures={activeTextures as any}
+                    onTextureSelect={onTextureSelect}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ACCORDION: GLB MESH & MATERIAL CONFIGURATOR */}
+            <div className={`transition-all rounded-xl border border-neutral-800/80 overflow-hidden ${isGltfConfigOpen ? 'bg-neutral-950' : 'bg-transparent border-none'}`}>
+              <button type="button" onClick={() => setIsGltfConfigOpen(!isGltfConfigOpen)} className={`w-full flex justify-between items-center px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider ${isGltfConfigOpen ? 'bg-neutral-950/90 border-b border-neutral-900/40' : 'bg-neutral-950 rounded-xl border border-neutral-800/60'}`}>
+                <span className="flex items-center gap-1.5">📂 {isGltfConfigOpen ? '▼' : '▶'} GLB Mesh & Materials</span>
+              </button>
+              {isGltfConfigOpen && (
+                <div className="p-3 space-y-3 bg-neutral-950/30">
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">Selected Mesh:</span>
+                    <span className="text-xs font-mono font-bold text-neutral-200 block bg-neutral-900 px-2.5 py-1.5 rounded-lg border border-neutral-850 truncate">{activeSurface}</span>
+                  </div>
+
+                  {availableMaterials && availableMaterials.length > 0 && onMaterialSwap && (
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">Swap Mesh Material:</span>
+                      <select
+                        value={materialSwaps?.[activeSurface] || ''}
+                        onChange={(e) => onMaterialSwap(activeSurface, e.target.value)}
+                        className="w-full bg-neutral-900 text-xs text-neutral-250 font-bold border border-neutral-850 hover:border-neutral-700 px-3 py-2 rounded-xl focus:outline-none transition-all cursor-pointer"
+                      >
+                        <option value="">(Native Blender Material)</option>
+                        {availableMaterials.map((mat) => (
+                          <option key={mat} value={mat}>
+                            {mat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* ACCORDION: CAMERA HUD */}
             <div className={`transition-all rounded-xl border border-neutral-800/80 overflow-hidden ${isCameraOpen ? 'bg-neutral-950' : 'bg-transparent border-none'}`}>
               <button type="button" onClick={() => setIsCameraOpen(!isCameraOpen)} className={`w-full flex justify-between items-center px-3 py-2.5 text-[9px] font-black text-cyan-400 uppercase tracking-wider ${isCameraOpen ? 'bg-neutral-950/90 border-b border-neutral-900/40' : 'bg-neutral-950 rounded-xl border border-neutral-800/60'}`}>
@@ -283,7 +342,7 @@ export function FloatingAdminPanel({
                           const vectorKey = gizmoMode === 'translate' ? 'position' : gizmoMode === 'rotate' ? 'rotation' : 'scale';
                           const currentVector = activeLight[vectorKey];
                           const sliderConfig = vectorKey === 'position'
-                            ? { min: -4.0, max: MAX_CEILING_HEIGHT, step: 0.02, customLimits: [null, [0.05, MAX_CEILING_HEIGHT - 0.05], null], labels: ['X (Left/Right)', 'Y (Height)', 'Z (Front/Back)'] }
+                            ? { min: -25.0, max: 25.0, step: 0.05, customLimits: [[-25.0, 25.0], [0.05, MAX_CEILING_HEIGHT - 0.05], [-25.0, 25.0]], labels: ['X (Left/Right)', 'Y (Height)', 'Z (Front/Back)'] }
                             : vectorKey === 'rotation'
                               ? { min: -Math.PI, max: Math.PI, step: 0.02, labels: ['Pitch (X)', 'Yaw (Y)', 'Roll (Z)'] }
                               : { min: 0.2, max: 5.0, step: 0.05, labels: ['Width (X)', 'Length (Y)', 'Depth (Z)'] };

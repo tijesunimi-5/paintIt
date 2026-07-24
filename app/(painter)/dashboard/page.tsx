@@ -68,7 +68,7 @@ export default function PainterDashboardPage() {
     avatar_url: string | null;
   }>({ bio: null, location: null, avatar_url: null });
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
     const loadDashboardMasterData = async () => {

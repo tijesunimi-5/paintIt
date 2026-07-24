@@ -32,7 +32,7 @@ export default function ClientProfilePage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [successState, setSuccessState] = useState(false);
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   // Fetch basic account information on mount
   useEffect(() => {

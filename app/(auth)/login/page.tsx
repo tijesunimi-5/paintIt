@@ -1,3 +1,4 @@
+"use client"
 import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -14,7 +15,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const redirect = searchParams?.get("redirect");
 
-  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const handleExecuteLogin = async (e: React.FormEvent) => {
     e.preventDefault();

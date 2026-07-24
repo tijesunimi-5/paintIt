@@ -1,16 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
-import { TEXTURE_PRESETS, TextureCategory, TexturePresetItem } from "@/utils/generateFloorTextures";
+import React, { useState, useEffect } from "react";
+import { TEXTURE_PRESETS, TextureCategory, TexturePresetItem, getMeshCategory } from "@/utils/generateFloorTextures";
 
 interface TexturePickerProps {
-  activeTextures: Record<TextureCategory, string>; // category -> textureId
-  onTextureSelect: (category: TextureCategory, textureId: string) => void;
+  activeTextures: Record<string, string>; // meshName or category -> textureId
+  onTextureSelect: (surfaceOrCategory: string, textureId: string) => void;
+  activeSurface?: string;
+  availableMaterials?: string[];
+  materialSwaps?: Record<string, string>;
+  onMaterialSwap?: (meshName: string, materialName: string) => void;
 }
 
 export default function ClientTexturePicker({
   activeTextures,
   onTextureSelect,
+  activeSurface = "",
+  availableMaterials = [],
+  materialSwaps = {},
+  onMaterialSwap
 }: TexturePickerProps) {
   const [activeTab, setActiveTab] = useState<TextureCategory>("FLOOR");
 
@@ -19,6 +27,15 @@ export default function ClientTexturePicker({
     { id: "WARDROBE", label: "Wardrobe", icon: "🗄️" },
     { id: "DOOR", label: "Doors & Trim", icon: "🚪" },
   ];
+
+  // Auto-switch tabs based on the category of the selected surface
+  useEffect(() => {
+    if (!activeSurface) return;
+    const resolvedCategory = getMeshCategory(activeSurface);
+    if (resolvedCategory === "FLOOR" || resolvedCategory === "WARDROBE" || resolvedCategory === "DOOR") {
+      setActiveTab(resolvedCategory);
+    }
+  }, [activeSurface]);
 
   const filteredPresets = TEXTURE_PRESETS.filter((item) => item.category === activeTab);
 
@@ -45,11 +62,13 @@ export default function ClientTexturePicker({
       {/* Preset Swatch Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[45vh] overflow-y-auto pr-1">
         {filteredPresets.map((item: TexturePresetItem) => {
-          const isSelected = activeTextures[item.category] === item.id;
+          // Check if selected either specifically for activeSurface or as a category fallback
+          const isSelected = (activeSurface && activeTextures[activeSurface] === item.id) || activeTextures[item.category] === item.id;
+          
           return (
             <button
               key={item.id}
-              onClick={() => onTextureSelect(item.category, item.id)}
+              onClick={() => onTextureSelect(activeSurface || item.category, item.id)}
               className={`p-2.5 rounded-xl border flex flex-col items-center gap-2 transition-all ${
                 isSelected
                   ? "bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30 scale-105"
@@ -73,6 +92,28 @@ export default function ClientTexturePicker({
           );
         })}
       </div>
+
+      {/* Native Blender Materials Swapper Section */}
+      {activeSurface && availableMaterials.length > 0 && onMaterialSwap && (
+        <div className="space-y-2 pt-4 border-t border-neutral-900">
+          <div className="flex flex-col">
+            <span className="text-[9px] uppercase font-black tracking-widest text-neutral-500">Native Model Materials</span>
+            <span className="text-[8px] text-neutral-600 font-mono mt-0.5 truncate">Surface: {activeSurface}</span>
+          </div>
+          <select
+            value={materialSwaps[activeSurface] || ""}
+            onChange={(e) => onMaterialSwap(activeSurface, e.target.value)}
+            className="w-full bg-neutral-900 border border-neutral-850 hover:border-neutral-750 px-3 py-2.5 rounded-xl text-xs text-neutral-250 font-bold focus:outline-none transition-all cursor-pointer font-sans"
+          >
+            <option value="">(Default Preset Texture)</option>
+            {availableMaterials.map((mat) => (
+              <option key={mat} value={mat}>
+                {mat}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
