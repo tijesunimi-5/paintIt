@@ -89,6 +89,7 @@ function ClientInteractiveCanvas({
   isNightMode,
   activeFinish = 'EMULSION',
   activeTextures,
+  onModelLoaded,
 }: {
   modelUrl: string;
   roomColors: Record<string, string>;
@@ -98,6 +99,7 @@ function ClientInteractiveCanvas({
   isNightMode: boolean;
   activeFinish?: PaintFinishId;
   activeTextures?: Record<string, string>;
+  onModelLoaded?: (materials: string[], meshes: { name: string; originalMaterial: string }[]) => void;
 }) {
   const { scene, materials } = useGLTF(modelUrl) as any;
   const clonedScene = React.useMemo(() => {
@@ -131,6 +133,24 @@ function ClientInteractiveCanvas({
       controlsRef.current.update();
     }
   }, [cameraConfig]);
+
+  // Extract all meshes and materials to notify parent component
+  useEffect(() => {
+    if (scene && materials && onModelLoaded) {
+      const materialNames = Object.keys(materials);
+      const meshList: { name: string; originalMaterial: string }[] = [];
+      scene.traverse((node: any) => {
+        if (node instanceof THREE.Mesh) {
+          const matName = node.material && (node.material as THREE.Material).name;
+          meshList.push({
+            name: node.name,
+            originalMaterial: matName || 'default'
+          });
+        }
+      });
+      onModelLoaded(materialNames, meshList);
+    }
+  }, [scene, materials, onModelLoaded]);
 
   useEffect(() => {
     if (!clonedScene) return;
@@ -306,7 +326,7 @@ export default function PublicProfileAndConceptPage() {
   // View UI Panels Configurations
   const [activeTab, setActiveTab] = useState<"paint" | "texture" | "lighting">("paint");
   const [activeSurface, setActiveSurface] = useState<string>("wallFront");
-  const [activeTextures, setActiveTextures] = useState<Record<TextureCategory, string>>({
+  const [activeTextures, setActiveTextures] = useState<Record<string, string>>({
     FLOOR: "original",
     WARDROBE: "original",
     DOOR: "original",
@@ -345,6 +365,28 @@ export default function PublicProfileAndConceptPage() {
   const [profile, setProfile] = useState<SharedDataPayload | null>(null);
   const [concepts3D, setConcepts3D] = useState<Painter3DConcept[]>([]);
   const [customColors, setCustomColors] = useState<CustomColor[]>([]);
+  const [availableMaterials, setAvailableMaterials] = useState<string[]>([]);
+  const [meshesWithOriginalMaterials, setMeshesWithOriginalMaterials] = useState<{ name: string; originalMaterial: string }[]>([]);
+
+  const materialSwaps = (roomColors?._materialSwaps as unknown as Record<string, string>) || {};
+  const handleMaterialSwap = (meshName: string, materialName: string) => {
+    setRoomColors(prev => {
+      const currentSwaps = (prev._materialSwaps as unknown as Record<string, string>) || {};
+      const updatedSwaps = { ...currentSwaps, [meshName]: materialName };
+      
+      const copy = { ...prev, _materialSwaps: updatedSwaps as any };
+      return copy;
+    });
+    
+    // Clear active texture for this surface when a native material is selected
+    if (materialName) {
+      setActiveTextures(tPrev => {
+        const tCopy = { ...tPrev };
+        delete tCopy[meshName];
+        return tCopy;
+      });
+    }
+  };
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [importing, setImporting] = useState<boolean>(false);
@@ -409,6 +451,33 @@ export default function PublicProfileAndConceptPage() {
             const parsedLightData = safeParse(vis.light_data, []);
             const parsedCameraData = safeParse(vis.camera_data, null);
 
+            setRoomColors(parsedRoomData);
+
+            const templateToFetch = vis.master_design_id || "tmpl_hostel_lux";
+            const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
+
+            let templateBulbs: BulbState[] = [];
+            let resolvedModelUrl = "/models/selfcon.glb";
+            if (templateRes && templateRes.ok) {
+              const templateData = await templateRes.json();
+              if (templateData.model_url) {
+                resolvedModelUrl = templateData.model_url;
+              }
+
+              if (templateData.lighting_settings) {
+                templateBulbs = templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+                  ...light,
+                  name: `Bulb #${index + 1}`,
+                  enabled: light.visible !== undefined ? light.visible : true,
+                  visible: light.visible !== undefined ? light.visible : true
+                }));
+              }
+
+              if (!parsedCameraData && templateData.camera_settings) {
+                setCameraConfig(templateData.camera_settings);
+              }
+            }
+
             setSharedConcept({
               share_id: vis.id,
               shared_at: vis.created_at || new Date().toISOString(),
@@ -425,31 +494,8 @@ export default function PublicProfileAndConceptPage() {
               skills: [],
               avatar_url: null,
               phone_number: null,
-              model_url: "/models/selfcon.glb"
+              model_url: resolvedModelUrl
             });
-
-            setRoomColors(parsedRoomData);
-
-            const templateToFetch = vis.master_design_id || "tmpl_hostel_lux";
-            const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
-
-            let templateBulbs: BulbState[] = [];
-            if (templateRes && templateRes.ok) {
-              const templateData = await templateRes.json();
-
-              if (templateData.lighting_settings) {
-                templateBulbs = templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
-                  ...light,
-                  name: `Bulb #${index + 1}`,
-                  enabled: light.visible !== undefined ? light.visible : true,
-                  visible: light.visible !== undefined ? light.visible : true
-                }));
-              }
-
-              if (!parsedCameraData && templateData.camera_settings) {
-                setCameraConfig(templateData.camera_settings);
-              }
-            }
 
             if (Array.isArray(parsedLightData) && parsedLightData.length > 0) {
               setBulbs(parsedLightData);
@@ -473,15 +519,19 @@ export default function PublicProfileAndConceptPage() {
         if (shareRes && shareRes.ok) {
           const conceptBody = await shareRes.json();
           const conceptData = conceptBody.data as SharedDataPayload;
-          setSharedConcept(conceptData);
+          
           setRoomColors(conceptData.room_data || {});
           setIs3DConceptShare(true);
 
           const templateToFetch = conceptData.master_design_id || "tmpl_hostel_lux";
           const templateRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${templateToFetch}`).catch(() => null);
 
+          let resolvedModelUrl = "/models/selfcon.glb";
           if (templateRes && templateRes.ok) {
             const templateData = await templateRes.json();
+            if (templateData.model_url) {
+              resolvedModelUrl = templateData.model_url;
+            }
             if (templateData.lighting_settings) {
               setBulbs(
                 templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
@@ -494,6 +544,12 @@ export default function PublicProfileAndConceptPage() {
             }
             if (templateData.camera_settings) setCameraConfig(templateData.camera_settings);
           }
+
+          setSharedConcept({
+            ...conceptData,
+            model_url: resolvedModelUrl
+          });
+
           setIsLoading(false);
           return;
         }
@@ -504,13 +560,66 @@ export default function PublicProfileAndConceptPage() {
           fetch(`${BACKEND_API_URL}/api/visualizations/painter/${targetId}`).catch(() => null)
         ]);
 
+        let profileLoaded = false;
         if (profileRes && profileRes.ok) {
           const profileData = await profileRes.json();
-          setProfile(profileData.profile || null);
+          if (profileData.profile) {
+            setProfile(profileData.profile);
+            profileLoaded = true;
+          }
         }
         if (conceptsRes && conceptsRes.ok) {
           const conceptsData = await conceptsRes.json();
           setConcepts3D(conceptsData.visualizations || []);
+        }
+
+        // 🎯 4. Fallback - Master Catalog Template Lookup
+        if (!profileLoaded) {
+          const catalogRes = await fetch(`${BACKEND_API_URL}/api/visualizations/catalog/${targetId}`).catch(() => null);
+          if (catalogRes && catalogRes.ok) {
+            const templateData = await catalogRes.json();
+            if (!isSubscribed) return;
+
+            setSharedConcept({
+              share_id: templateData.id,
+              shared_at: new Date().toISOString(),
+              design_name: templateData.title || "Catalog Layout Concept",
+              room_data: templateData.default_room_data || {},
+              parent_template_name: templateData.title || "Custom Layout",
+              master_design_id: templateData.id,
+              painter_id: "catalog",
+              full_name: "PaintIt Catalog Design",
+              email: "",
+              bio: null,
+              location: null,
+              experience_years: 0,
+              skills: [],
+              avatar_url: null,
+              phone_number: null,
+              model_url: templateData.model_url || "/models/selfcon.glb"
+            });
+
+            setRoomColors(templateData.default_room_data || {});
+
+            if (templateData.lighting_settings) {
+              setBulbs(
+                templateData.lighting_settings.map((light: DBRawLight, index: number) => ({
+                  ...light,
+                  name: `Bulb #${index + 1}`,
+                  enabled: light.visible !== undefined ? light.visible : true,
+                  visible: light.visible !== undefined ? light.visible : true
+                }))
+              );
+            }
+
+            if (templateData.camera_settings) {
+              setCameraConfig(templateData.camera_settings);
+            }
+
+            setIs3DConceptShare(true);
+            setIsLoading(false);
+            return;
+          }
         }
       } catch (err) {
         console.error("Aggregation error on public stream:", err);
@@ -850,6 +959,10 @@ export default function PublicProfileAndConceptPage() {
                 isNightMode={isNightMode}
                 activeFinish={activeFinish}
                 activeTextures={activeTextures}
+                onModelLoaded={(materials, meshes) => {
+                  setAvailableMaterials(materials);
+                  if (meshes) setMeshesWithOriginalMaterials(meshes);
+                }}
               />
             </Suspense>
           </Canvas>
@@ -930,6 +1043,11 @@ export default function PublicProfileAndConceptPage() {
                 onTextureSelect={(category, textureId) =>
                   setActiveTextures((prev) => ({ ...prev, [category]: textureId }))
                 }
+                activeSurface={activeSurface}
+                availableMaterials={availableMaterials}
+                materialSwaps={materialSwaps}
+                onMaterialSwap={handleMaterialSwap}
+                meshes={meshesWithOriginalMaterials}
               />
             )}
             {activeTab === "lighting" && (

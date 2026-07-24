@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { TEXTURE_PRESETS, TextureCategory, TexturePresetItem, getMeshCategory } from "@/utils/generateFloorTextures";
+import { TEXTURE_PRESETS, TextureCategory, TexturePresetItem, getMeshCategory, MeshCategory } from "@/utils/generateFloorTextures";
 
 interface TexturePickerProps {
   activeTextures: Record<string, string>; // meshName or category -> textureId
@@ -10,6 +10,7 @@ interface TexturePickerProps {
   availableMaterials?: string[];
   materialSwaps?: Record<string, string>;
   onMaterialSwap?: (meshName: string, materialName: string) => void;
+  meshes?: { name: string; originalMaterial: string }[];
 }
 
 export default function ClientTexturePicker({
@@ -18,7 +19,8 @@ export default function ClientTexturePicker({
   activeSurface = "",
   availableMaterials = [],
   materialSwaps = {},
-  onMaterialSwap
+  onMaterialSwap,
+  meshes = []
 }: TexturePickerProps) {
   const [activeTab, setActiveTab] = useState<TextureCategory>("FLOOR");
 
@@ -38,6 +40,22 @@ export default function ClientTexturePicker({
   }, [activeSurface]);
 
   const filteredPresets = TEXTURE_PRESETS.filter((item) => item.category === activeTab);
+
+  // Helper to determine the category of a material based on which meshes originally used it
+  const getMaterialCategory = (matName: string): MeshCategory => {
+    const matchingMesh = meshes.find(m => m.originalMaterial === matName);
+    if (!matchingMesh) return "OTHER";
+    return getMeshCategory(matchingMesh.name);
+  };
+
+  const activeSurfaceCategory = activeSurface ? getMeshCategory(activeSurface) : null;
+
+  // Filter materials to only show those compatible with the active surface's category
+  const compatibleMaterials = availableMaterials.filter(mat => {
+    if (!activeSurfaceCategory || meshes.length === 0) return true;
+    const matCategory = getMaterialCategory(mat);
+    return matCategory === activeSurfaceCategory;
+  });
 
   return (
     <div className="space-y-4 text-white">
@@ -97,21 +115,32 @@ export default function ClientTexturePicker({
       {activeSurface && availableMaterials.length > 0 && onMaterialSwap && (
         <div className="space-y-2 pt-4 border-t border-neutral-900">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase font-black tracking-widest text-neutral-500">Native Model Materials</span>
-            <span className="text-[8px] text-neutral-600 font-mono mt-0.5 truncate">Surface: {activeSurface}</span>
+            <span className="text-[9px] uppercase font-black tracking-widest text-neutral-500 font-sans">
+              Compatible Blender Materials
+            </span>
+            <span className="text-[8px] text-neutral-400 font-mono mt-0.5 truncate">
+              Surface: {activeSurface} ({activeSurfaceCategory})
+            </span>
           </div>
+
           <select
             value={materialSwaps[activeSurface] || ""}
             onChange={(e) => onMaterialSwap(activeSurface, e.target.value)}
             className="w-full bg-neutral-900 border border-neutral-850 hover:border-neutral-750 px-3 py-2.5 rounded-xl text-xs text-neutral-250 font-bold focus:outline-none transition-all cursor-pointer font-sans"
           >
             <option value="">(Default Preset Texture)</option>
-            {availableMaterials.map((mat) => (
+            {compatibleMaterials.map((mat) => (
               <option key={mat} value={mat}>
                 {mat}
               </option>
             ))}
           </select>
+
+          {compatibleMaterials.length === 0 && (
+            <span className="text-[9px] text-neutral-600 italic block">
+              No compatible native materials found in GLB model for this mesh category.
+            </span>
+          )}
         </div>
       )}
     </div>

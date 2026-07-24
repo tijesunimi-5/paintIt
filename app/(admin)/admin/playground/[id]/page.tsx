@@ -54,6 +54,7 @@ export default function DedicatedPlayground() {
   });
   const [materialSwaps, setMaterialSwaps] = useState<Record<string, string>>({});
   const [availableMaterials, setAvailableMaterials] = useState<string[]>([]);
+  const [meshesWithOriginalMaterials, setMeshesWithOriginalMaterials] = useState<{ name: string; originalMaterial: string }[]>([]);
 
   const [hasHydrated, setHasHydrated] = useState<boolean>(false);
   const [isLandscapeOverride, setIsLandscapeOverride] = useState<boolean>(false);
@@ -489,7 +490,10 @@ export default function DedicatedPlayground() {
               activeFinish={activeFinish}
               activeTextures={activeTextures}
               materialSwaps={materialSwaps}
-              onModelLoaded={(materials) => setAvailableMaterials(materials)}
+              onModelLoaded={(materials, meshes) => {
+                setAvailableMaterials(materials);
+                if (meshes) setMeshesWithOriginalMaterials(meshes);
+              }}
               onTargetSelect={(meshName: string) => {
                 if (!cleanViewActive && isAdmin) setActiveSurface(meshName);
               }}
@@ -534,6 +538,7 @@ export default function DedicatedPlayground() {
           availableMaterials={availableMaterials}
           materialSwaps={materialSwaps}
           onMaterialSwap={(meshName, materialName) => setMaterialSwaps((prev) => ({ ...prev, [meshName]: materialName }))}
+          meshes={meshesWithOriginalMaterials}
           onAddLight={addNewLight}
           onSelectLight={(id) => {
             // 🔒 FIX: Temporarily intercept panel events to block async trace collisions

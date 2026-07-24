@@ -20,7 +20,7 @@ interface CanvasProps {
   roomTextures?: Record<string, string>;
   activeTextures?: Record<string, string>;
   materialSwaps?: Record<string, string>;
-  onModelLoaded?: (meshes: string[], materials: string[]) => void;
+  onModelLoaded?: (materials: string[], meshes: { name: string; originalMaterial: string }[]) => void;
   isNightMode?: boolean;
 }
 
@@ -72,14 +72,18 @@ export default function WorkspaceCanvas({
   useEffect(() => {
     if (scene && materials && onModelLoaded) {
       const materialNames = Object.keys(materials);
-      const meshNames: string[] = [];
+      const meshList: { name: string; originalMaterial: string }[] = [];
       scene.traverse((node) => {
         if (node instanceof THREE.Mesh) {
-          meshNames.push(node.name);
+          const matName = node.material && (node.material as THREE.Material).name;
+          meshList.push({
+            name: node.name,
+            originalMaterial: matName || 'default'
+          });
         }
       });
-      console.log(`📦 [Workspace Canvas] Model Loaded: ${meshNames.length} meshes, ${materialNames.length} materials detected.`);
-      onModelLoaded(meshNames, materialNames);
+      console.log(`📦 [Workspace Canvas] Model Loaded: ${meshList.length} meshes, ${materialNames.length} materials detected.`);
+      onModelLoaded(materialNames, meshList);
     }
   }, [scene, materials, onModelLoaded]);
 

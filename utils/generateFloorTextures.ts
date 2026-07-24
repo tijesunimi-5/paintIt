@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 export type TextureCategory = "FLOOR" | "WARDROBE" | "DOOR";
+export type MeshCategory = TextureCategory | "WALL" | "OTHER";
 
 export interface TexturePresetItem {
   id: string;

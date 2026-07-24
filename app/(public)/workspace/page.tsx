@@ -52,6 +52,7 @@ function WorkspaceContent() {
   });
   const [detectedMeshes, setDetectedMeshes] = useState<string[]>([]);
   const [availableMaterials, setAvailableMaterials] = useState<string[]>([]);
+  const [meshesWithOriginalMaterials, setMeshesWithOriginalMaterials] = useState<{ name: string; originalMaterial: string }[]>([]);
   const [materialSwaps, setMaterialSwaps] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -98,9 +99,10 @@ function WorkspaceContent() {
   const initialRoomColorsRef = useRef(roomColors);
   const initialCameraConfigRef = useRef(cameraConfig);
 
-  const handleModelLoaded = (meshes: string[], materials: string[]) => {
-    setDetectedMeshes(meshes);
+  const handleModelLoaded = (materials: string[], meshes: { name: string; originalMaterial: string }[]) => {
+    setDetectedMeshes(meshes.map(m => m.name));
     setAvailableMaterials(materials);
+    setMeshesWithOriginalMaterials(meshes);
   };
 
   // Deep Hydration Loop
@@ -388,19 +390,21 @@ function WorkspaceContent() {
 
       <section className="flex-1 w-full h-full relative z-10">
         <Canvas camera={{ position: cameraConfig.position || [-2.73, 3.28, -2.51], fov: 65 }}>
-          <WorkspaceCanvas
-            modelUrl={modelUrl}
-            roomColors={roomColors}
-            activeSurface={activeSurface}
-            onSurfaceSelect={setActiveSurface}
-            bulbs={bulbs}
-            cameraConfig={cameraConfig}
-            roomTextures={{}}
-            activeTextures={activeTextures}
-            materialSwaps={materialSwaps}
-            onModelLoaded={handleModelLoaded}
-            isNightMode={isNightMode}
-          />
+          <Suspense fallback={null}>
+            <WorkspaceCanvas
+              modelUrl={modelUrl}
+              roomColors={roomColors}
+              activeSurface={activeSurface}
+              onSurfaceSelect={setActiveSurface}
+              bulbs={bulbs}
+              cameraConfig={cameraConfig}
+              roomTextures={{}}
+              activeTextures={activeTextures}
+              materialSwaps={materialSwaps}
+              onModelLoaded={handleModelLoaded}
+              isNightMode={isNightMode}
+            />
+          </Suspense>
         </Canvas>
       </section>
 
@@ -495,6 +499,7 @@ function WorkspaceContent() {
                   return copy;
                 });
               }}
+              meshes={meshesWithOriginalMaterials}
             />
           )}
           {activeTab === "lighting" && (

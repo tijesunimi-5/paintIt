@@ -6,6 +6,7 @@ import { PaintFinishSelector } from '@/components/ui/PaintFinishSelector';
 import { PaintFinishId } from '@/config/paintFinishes';
 
 import ClientTexturePicker from '@/components/canvas/ClientTexturePicker';
+import { getMeshCategory, MeshCategory } from '@/utils/generateFloorTextures';
 
 const MAX_CEILING_HEIGHT = 15.0;
 
@@ -38,6 +39,7 @@ interface AdminPanelProps {
   availableMaterials?: string[];
   materialSwaps?: Record<string, string>;
   onMaterialSwap?: (meshName: string, materialName: string) => void;
+  meshes?: { name: string; originalMaterial: string }[];
 }
 
 export function FloatingAdminPanel({
@@ -47,12 +49,29 @@ export function FloatingAdminPanel({
   isLocked, onToggleLock, onSaveToDatabase, cleanViewActive, onToggleCleanView,
   isLandscapeLayout,
   activeTextures, onTextureSelect,
-  availableMaterials, materialSwaps, onMaterialSwap
+  availableMaterials, materialSwaps, onMaterialSwap,
+  meshes = []
 }: AdminPanelProps) {
   const [position, setPosition] = useState({ x: 16, y: 80 });
   const [size, setSize] = useState({ width: 340, height: 490 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
+
+  // Helper to determine the category of a material based on which meshes originally used it
+  const getMaterialCategory = (matName: string): MeshCategory => {
+    const matchingMesh = meshes.find(m => m.originalMaterial === matName);
+    if (!matchingMesh) return "OTHER";
+    return getMeshCategory(matchingMesh.name);
+  };
+
+  const activeSurfaceCategory = activeSurface ? getMeshCategory(activeSurface) : null;
+
+  // Filter materials to only show those compatible with the active surface's category
+  const compatibleMaterials = (availableMaterials || []).filter(mat => {
+    if (!activeSurfaceCategory || meshes.length === 0) return true;
+    const matCategory = getMaterialCategory(mat);
+    return matCategory === activeSurfaceCategory;
+  });
 
   const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false);
   const [isPainterOpen, setIsPainterOpen] = useState<boolean>(true);
@@ -212,6 +231,11 @@ export function FloatingAdminPanel({
                   <ClientTexturePicker
                     activeTextures={activeTextures as any}
                     onTextureSelect={onTextureSelect}
+                    activeSurface={activeSurface}
+                    availableMaterials={availableMaterials}
+                    materialSwaps={materialSwaps}
+                    onMaterialSwap={onMaterialSwap}
+                    meshes={meshes}
                   />
                 </div>
               )}
@@ -231,19 +255,27 @@ export function FloatingAdminPanel({
 
                   {availableMaterials && availableMaterials.length > 0 && onMaterialSwap && (
                     <div className="space-y-1">
-                      <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">Swap Mesh Material:</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider">Swap Mesh Material:</span>
+                        <span className="text-[8px] text-amber-500 font-bold uppercase tracking-wide">Category: {activeSurfaceCategory || "OTHER"}</span>
+                      </div>
                       <select
                         value={materialSwaps?.[activeSurface] || ''}
                         onChange={(e) => onMaterialSwap(activeSurface, e.target.value)}
                         className="w-full bg-neutral-900 text-xs text-neutral-250 font-bold border border-neutral-850 hover:border-neutral-700 px-3 py-2 rounded-xl focus:outline-none transition-all cursor-pointer"
                       >
                         <option value="">(Native Blender Material)</option>
-                        {availableMaterials.map((mat) => (
+                        {compatibleMaterials.map((mat) => (
                           <option key={mat} value={mat}>
                             {mat}
                           </option>
                         ))}
                       </select>
+                      {compatibleMaterials.length === 0 && (
+                        <span className="text-[8px] text-neutral-500 italic block mt-0.5">
+                          No compatible materials found in model for this category.
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
